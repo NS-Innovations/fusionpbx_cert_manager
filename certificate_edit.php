@@ -384,6 +384,19 @@
 		unset($sql, $parameters);
 	}
 
+//get the latest entries of the log
+	$certificate_logs = [];
+	if (!empty($certificate_uuid) && permission_exists('certificate_log_view')) {
+		$sql = "select to_char(log_date, 'YYYY-MM-DD HH24:MI:SS') as log_date, log_level, log_message ";
+		$sql .= "from v_certificate_logs ";
+		$sql .= "where certificate_uuid = :certificate_uuid ";
+		$sql .= "order by log_date desc ";
+		$sql .= "limit 50 ";
+		$parameters['certificate_uuid'] = $certificate_uuid;
+		$certificate_logs = $database->select($sql, $parameters, 'all') ?: [];
+		unset($sql, $parameters);
+	}
+
 //add a blank deployment row to the end of the list
 	if (!is_array($certificate_deployments)) {
 		$certificate_deployments = [];
@@ -746,6 +759,29 @@
 	echo "</table>\n";
 	echo "</div>\n";
 	echo "<br /><br />\n";
+
+	//show the latest entries of the log
+	if (!empty($certificate_logs)) {
+		echo "<b>".$text['label-certificate_log']."</b>\n";
+		echo "<br /><br />\n";
+		echo "<div class='card'>\n";
+		echo "<table class='list'>\n";
+		echo "<tr class='list-header'>\n";
+		echo "	<th>".$text['label-date']."</th>\n";
+		echo "	<th>".$text['label-level']."</th>\n";
+		echo "	<th>".$text['label-message']."</th>\n";
+		echo "</tr>\n";
+		foreach ($certificate_logs as $row) {
+			echo "<tr class='list-row'>\n";
+			echo "	<td style='white-space: nowrap;'>".escape($row['log_date'])."</td>\n";
+			echo "	<td>".escape($text['option-log_level_'.$row['log_level']] ?? $row['log_level'])."</td>\n";
+			echo "	<td>".escape($row['log_message'])."</td>\n";
+			echo "</tr>\n";
+		}
+		echo "</table>\n";
+		echo "</div>\n";
+		echo "<br /><br />\n";
+	}
 
 	if ($action == "update") {
 		echo "<input type='hidden' name='certificate_uuid' value='".escape($certificate_uuid)."'>\n";

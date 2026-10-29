@@ -405,4 +405,19 @@ $text['email_subject-certificate_failed']['en-gb'] = "Certificate \${name} could
 $text['email_body-certificate_failed']['en-us'] = "Ordering the certificate \${name} for \${domains} failed: \${message} It will be tried again at \${next_attempt}. The current certificate is valid until \${expires}.";
 $text['email_body-certificate_failed']['en-gb'] = "Ordering the certificate \${name} for \${domains} failed: \${message} It will be tried again at \${next_attempt}. The current certificate is valid until \${expires}.";
 
+$text['label-certificate_log']['en-us'] = "Log";
+$text['label-certificate_log']['en-gb'] = "Log";
+
+$text['label-message']['en-us'] = "Message";
+$text['label-message']['en-gb'] = "Message";
+
+$text['option-log_level_info']['en-us'] = "Info";
+$text['option-log_level_info']['en-gb'] = "Info";
+
+$text['option-log_level_warning']['en-us'] = "Warning";
+$text['option-log_level_warning']['en-gb'] = "Warning";
+
+$text['option-log_level_error']['en-us'] = "Error";
+$text['option-log_level_error']['en-gb'] = "Error";
+
 ?>
