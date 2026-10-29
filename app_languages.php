@@ -111,4 +111,19 @@ $text['message-acme_account_register_failed']['en-gb'] = "The certificate author
 $text['option-dns_provider_manual']['en-us'] = "Manual";
 $text['option-dns_provider_manual']['en-gb'] = "Manual";
 
+$text['option-dns_provider_cloudflare']['en-us'] = "Cloudflare";
+$text['option-dns_provider_cloudflare']['en-gb'] = "Cloudflare";
+
+$text['label-dns_provider_cloudflare_api_token']['en-us'] = "API Token";
+$text['label-dns_provider_cloudflare_api_token']['en-gb'] = "API Token";
+
+$text['description-dns_provider_cloudflare_api_token']['en-us'] = "Enter a Cloudflare API token with the Zone > DNS > Edit and Zone > Zone > Read permissions for the zones of the certificates. It is stored encrypted. Leave it blank to keep the saved token.";
+$text['description-dns_provider_cloudflare_api_token']['en-gb'] = "Enter a Cloudflare API token with the Zone > DNS > Edit and Zone > Zone > Read permissions for the zones of the certificates. It is stored encrypted. Leave it blank to keep the saved token.";
+
+$text['label-dns_provider_cloudflare_zone_id']['en-us'] = "Zone ID";
+$text['label-dns_provider_cloudflare_zone_id']['en-gb'] = "Zone ID";
+
+$text['description-dns_provider_cloudflare_zone_id']['en-us'] = "Optional. Enter the zone ID to use it for every name. Leave it blank to find the zone of each name automatically.";
+$text['description-dns_provider_cloudflare_zone_id']['en-gb'] = "Optional. Enter the zone ID to use it for every name. Leave it blank to find the zone of each name automatically.";
+
 ?>
