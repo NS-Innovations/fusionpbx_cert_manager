@@ -126,4 +126,43 @@ $text['label-dns_provider_cloudflare_zone_id']['en-gb'] = "Zone ID";
 $text['description-dns_provider_cloudflare_zone_id']['en-us'] = "Optional. Enter the zone ID to use it for every name. Leave it blank to find the zone of each name automatically.";
 $text['description-dns_provider_cloudflare_zone_id']['en-gb'] = "Optional. Enter the zone ID to use it for every name. Leave it blank to find the zone of each name automatically.";
 
+$text['title-dns_providers']['en-us'] = "DNS Providers";
+$text['title-dns_providers']['en-gb'] = "DNS Providers";
+
+$text['title-dns_provider']['en-us'] = "DNS Provider";
+$text['title-dns_provider']['en-gb'] = "DNS Provider";
+
+$text['description-dns_providers']['en-us'] = "A DNS provider publishes the TXT records that prove control of a name over dns-01, which a wildcard certificate requires.";
+$text['description-dns_providers']['en-gb'] = "A DNS provider publishes the TXT records that prove control of a name over dns-01, which a wildcard certificate requires.";
+
+$text['description-dns_provider']['en-us'] = "Select the provider and enter its credentials. Test saves the provider and checks that the credentials work.";
+$text['description-dns_provider']['en-gb'] = "Select the provider and enter its credentials. Test saves the provider and checks that the credentials work.";
+
+$text['description-dns_provider_name']['en-us'] = "Enter the name of the DNS provider.";
+$text['description-dns_provider_name']['en-gb'] = "Enter the name of the DNS provider.";
+
+$text['description-dns_provider_type']['en-us'] = "Select where the DNS of the names is hosted.";
+$text['description-dns_provider_type']['en-gb'] = "Select where the DNS of the names is hosted.";
+
+$text['description-dns_provider_manual']['en-us'] = "The certificate page shows the TXT records an order needs. Add them at your DNS host; the order carries on once they are published.";
+$text['description-dns_provider_manual']['en-gb'] = "The certificate page shows the TXT records an order needs. Add them at your DNS host; the order carries on once they are published.";
+
+$text['description-dns_provider_enabled']['en-us'] = "Select whether the DNS provider is enabled. Certificates using a disabled provider are not renewed.";
+$text['description-dns_provider_enabled']['en-gb'] = "Select whether the DNS provider is enabled. Certificates using a disabled provider are not renewed.";
+
+$text['description-dns_provider_description']['en-us'] = "Enter the description.";
+$text['description-dns_provider_description']['en-gb'] = "Enter the description.";
+
+$text['button-test']['en-us'] = "Test";
+$text['button-test']['en-gb'] = "Test";
+
+$text['message-dns_provider_in_use']['en-us'] = "A DNS provider that a certificate uses cannot be deleted.";
+$text['message-dns_provider_in_use']['en-gb'] = "A DNS provider that a certificate uses cannot be deleted.";
+
+$text['message-dns_provider_test_passed']['en-us'] = "The DNS provider works.";
+$text['message-dns_provider_test_passed']['en-gb'] = "The DNS provider works.";
+
+$text['message-dns_provider_test_failed']['en-us'] = "The DNS provider does not work:";
+$text['message-dns_provider_test_failed']['en-gb'] = "The DNS provider does not work:";
+
 ?>

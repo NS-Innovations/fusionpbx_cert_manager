@@ -46,6 +46,16 @@ class dns_providers {
 	private $database;
 
 	/**
+	 * declare private variables
+	 */
+	private $permission_prefix;
+	private $list_page;
+	private $table;
+	private $uuid_prefix;
+	private $toggle_field;
+	private $toggle_values;
+
+	/**
 	 * Initializes the object with the provided settings.
 	 *
 	 * @param array $setting_array An optional array of settings, defaulting to an empty array.
@@ -55,6 +65,14 @@ class dns_providers {
 	public function __construct(array $setting_array = []) {
 		//set objects
 		$this->database = $setting_array['database'] ?? database::new();
+
+		//assign private variables
+		$this->permission_prefix = 'dns_provider_';
+		$this->list_page         = 'dns_providers.php';
+		$this->table             = 'dns_providers';
+		$this->uuid_prefix       = 'dns_provider_';
+		$this->toggle_field      = 'dns_provider_enabled';
+		$this->toggle_values     = ['true', 'false'];
 	}
 
 	/**
@@ -146,6 +164,143 @@ class dns_providers {
 	 */
 	public static function encode_settings(array $values, cert_manager_crypto $crypto): string {
 		return $crypto->encrypt(json_encode($values, JSON_UNESCAPED_SLASHES));
+	}
+
+	/**
+	 * Deletes one or more DNS providers. A DNS provider still used by a certificate is kept.
+	 *
+	 * @param array $records An array of record IDs to delete, where each ID is an associative array
+	 *                       containing 'uuid' and 'checked' keys.
+	 *
+	 * @return void No return value; this method modifies the database state and sets a message.
+	 */
+	public function delete($records) {
+		if (permission_exists($this->permission_prefix . 'delete')) {
+
+			//add multi-lingual support
+			$language = new text;
+			$text     = $language->get();
+
+			//validate the token
+			$token = new token;
+			if (!$token->validate($_SERVER['PHP_SELF'])) {
+				message::add($text['message-invalid_token'], 'negative');
+				header('Location: ' . $this->list_page);
+				exit;
+			}
+
+			//delete multiple records
+			if (is_array($records) && @sizeof($records) != 0) {
+
+				//filter out the unchecked DNS providers
+				$uuids = [];
+				foreach ($records as $record) {
+					if (!empty($record['checked']) && $record['checked'] == 'true' && is_uuid($record['uuid'])) {
+						$uuids[] = $record['uuid'];
+					}
+				}
+
+				//keep the DNS providers a certificate still uses
+				if (is_array($uuids) && @sizeof($uuids) != 0) {
+					$sql = "select distinct dns_provider_uuid from v_certificates ";
+					$sql .= "where dns_provider_uuid in ('" . implode("', '", $uuids) . "') ";
+					$rows = $this->database->select($sql, null, 'all');
+					unset($sql);
+					if (is_array($rows) && @sizeof($rows) != 0) {
+						$in_use = array_column($rows, 'dns_provider_uuid');
+						$uuids = array_values(array_diff($uuids, $in_use));
+						message::add($text['message-dns_provider_in_use'], 'negative');
+					}
+					unset($rows, $in_use);
+				}
+
+				//build the delete array
+				$array = [];
+				$x = 0;
+				foreach ($uuids as $uuid) {
+					$array[$this->table][$x][$this->uuid_prefix . 'uuid'] = $uuid;
+					$x++;
+				}
+
+				//delete the checked rows
+				if (!empty($array) && is_array($array) && @sizeof($array) != 0) {
+					$this->database->delete($array);
+					unset($array);
+
+					//set message
+					message::add($text['message-delete']);
+				}
+				unset($records);
+			}
+		}
+	}
+
+	/**
+	 * Toggles the enabled state of one or more DNS providers.
+	 *
+	 * @param array $records An array of record IDs to toggle, where each ID is an associative array
+	 *                       containing 'uuid' and 'checked' keys.
+	 *
+	 * @return void No return value; this method modifies the database state and sets a message.
+	 */
+	public function toggle($records) {
+		if (permission_exists($this->permission_prefix . 'edit')) {
+
+			//add multi-lingual support
+			$language = new text;
+			$text     = $language->get();
+
+			//validate the token
+			$token = new token;
+			if (!$token->validate($_SERVER['PHP_SELF'])) {
+				message::add($text['message-invalid_token'], 'negative');
+				header('Location: ' . $this->list_page);
+				exit;
+			}
+
+			//toggle the checked records
+			if (is_array($records) && @sizeof($records) != 0) {
+
+				//get the current toggle state
+				$uuids = [];
+				foreach ($records as $record) {
+					if (!empty($record['checked']) && $record['checked'] == 'true' && is_uuid($record['uuid'])) {
+						$uuids[] = "'" . $record['uuid'] . "'";
+					}
+				}
+				$states = [];
+				if (is_array($uuids) && @sizeof($uuids) != 0) {
+					$sql = "select " . $this->uuid_prefix . "uuid as uuid, " . $this->toggle_field . " as toggle from v_" . $this->table . " ";
+					$sql .= "where " . $this->uuid_prefix . "uuid in (" . implode(', ', $uuids) . ") ";
+					$rows = $this->database->select($sql, null, 'all');
+					if (is_array($rows) && @sizeof($rows) != 0) {
+						foreach ($rows as $row) {
+							$states[$row['uuid']] = $row['toggle'];
+						}
+					}
+					unset($sql, $rows, $row);
+				}
+
+				//build the update array
+				$array = [];
+				$x = 0;
+				foreach ($states as $uuid => $state) {
+					$array[$this->table][$x][$this->uuid_prefix . 'uuid'] = $uuid;
+					$array[$this->table][$x][$this->toggle_field]         = $state == $this->toggle_values[0] ? $this->toggle_values[1] : $this->toggle_values[0];
+					$x++;
+				}
+
+				//save the changes
+				if (!empty($array) && is_array($array) && @sizeof($array) != 0) {
+					$this->database->save($array);
+					unset($array);
+
+					//set message
+					message::add($text['message-toggle']);
+				}
+				unset($records);
+			}
+		}
 	}
 
 }
