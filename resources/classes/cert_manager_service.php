@@ -204,6 +204,9 @@ class cert_manager_service extends service {
 			if ($result['status'] == 'failed') {
 				$this->warning('deploying ' . $result['name'] . ' to ' . $result['target'] . ' failed: ' . $result['message']);
 			}
+			elseif ($result['status'] == 'waiting') {
+				$this->info('handed ' . $result['name'] . ' to the nginx helper');
+			}
 			else {
 				$this->info('deployed ' . $result['name'] . ' to ' . $result['target']);
 			}

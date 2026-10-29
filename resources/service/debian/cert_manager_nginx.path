@@ -1,0 +1,15 @@
+; Watches for the certificate manager service asking for nginx to use a new certificate.
+; install -o root -g root -m 755 /var/www/fusionpbx/app/cert_manager/resources/scripts/deploy_nginx.sh /usr/local/sbin/cert_manager_deploy_nginx
+; cp /var/www/fusionpbx/app/cert_manager/resources/service/debian/cert_manager_nginx.* /etc/systemd/system/
+; systemctl daemon-reload
+; systemctl enable --now cert_manager_nginx.path
+
+[Unit]
+Description=FusionPBX Certificate Manager nginx deployment watch
+
+[Path]
+PathChanged=/etc/fusionpbx/cert_manager/deploy/nginx.request
+Unit=cert_manager_nginx.service
+
+[Install]
+WantedBy=multi-user.target

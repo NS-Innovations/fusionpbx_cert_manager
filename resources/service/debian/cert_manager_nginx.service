@@ -1,0 +1,9 @@
+; Started by cert_manager_nginx.path. Runs the root owned copy of deploy_nginx.sh, never the one in the
+; web directory, which www-data can write.
+
+[Unit]
+Description=FusionPBX Certificate Manager nginx deployment
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cert_manager_deploy_nginx

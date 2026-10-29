@@ -45,7 +45,13 @@ class certificate_deployer {
 	 * the targets a certificate can be deployed to
 	 * @var array
 	 */
-	const targets = ['freeswitch'];
+	const targets = ['nginx', 'freeswitch'];
+
+	/**
+	 * how long to wait for the root helper to reload nginx before giving up, in seconds
+	 * @var int
+	 */
+	const nginx_timeout = 300;
 
 	/**
 	 * database object
@@ -82,6 +88,8 @@ class certificate_deployer {
 	 * @return array The results, one per deployment: name, target, status and message.
 	 */
 	public function deploy_pending(): array {
+		$results = $this->check_nginx();
+
 		$sql = "select d.certificate_deployment_uuid, d.deployment_target, d.deployment_options, ";
 		$sql .= "c.certificate_uuid, c.certificate_name, c.certificate_serial, c.certificate_pem, c.certificate_chain, c.certificate_private_key ";
 		$sql .= "from v_certificate_deployments as d ";
@@ -95,7 +103,6 @@ class certificate_deployer {
 		$rows = $this->database->select($sql, null, 'all');
 		unset($sql);
 
-		$results = [];
 		foreach ($rows ?: [] as $row) {
 			$results[] = $this->deploy($row);
 		}
@@ -118,6 +125,9 @@ class certificate_deployer {
 				throw new Exception('the certificate or its key is missing');
 			}
 			switch ($row['deployment_target']) {
+				case 'nginx':
+					[$status, $message] = $this->deploy_nginx($certificate, $chain, $private_key, $row['certificate_serial']);
+					break;
 				case 'freeswitch':
 					[$status, $message] = $this->deploy_freeswitch($certificate, $chain, $private_key);
 					break;
@@ -132,23 +142,109 @@ class certificate_deployer {
 			$message = $e->getMessage();
 		}
 
-		//record the result on the deployment and in the log of the certificate
+		//record the result
+		$this->record($row, $status, $message, $array);
+		return ['name' => $row['certificate_name'], 'target' => $row['deployment_target'], 'status' => $status, 'message' => $message];
+	}
+
+	/**
+	 * Records the result of a deployment on the deployment and in the log of the certificate.
+	 *
+	 * @param array  $row     The deployment joined with its certificate.
+	 * @param string $status  The status of the deployment.
+	 * @param string $message The message.
+	 * @param array  $array   Anything else to save with it.
+	 *
+	 * @return void
+	 */
+	private function record(array $row, string $status, string $message, array $array = []): void {
 		$array['certificate_deployments'][0]['certificate_deployment_uuid'] = $row['certificate_deployment_uuid'];
 		$array['certificate_deployments'][0]['deployment_status'] = $status;
 		$array['certificate_deployments'][0]['deployment_message'] = $message;
-		$array['certificate_logs'][0]['certificate_log_uuid'] = uuid();
-		$array['certificate_logs'][0]['certificate_uuid'] = $row['certificate_uuid'];
-		$array['certificate_logs'][0]['log_date'] = 'now()';
-		$array['certificate_logs'][0]['log_level'] = $status == 'failed' ? 'error' : 'info';
-		$array['certificate_logs'][0]['log_message'] = 'deploy to ' . $row['deployment_target'] . ': ' . $message;
+		if ($status != 'waiting') {
+			$array['certificate_logs'][0]['certificate_log_uuid'] = uuid();
+			$array['certificate_logs'][0]['certificate_uuid'] = $row['certificate_uuid'];
+			$array['certificate_logs'][0]['log_date'] = 'now()';
+			$array['certificate_logs'][0]['log_level'] = $status == 'failed' ? 'error' : 'info';
+			$array['certificate_logs'][0]['log_message'] = 'deploy to ' . $row['deployment_target'] . ': ' . $message;
+		}
 		$p = permissions::new();
 		$p->add('certificate_deployment_edit', 'temp');
 		$p->add('certificate_log_add', 'temp');
 		$this->database->save($array, false);
 		$p->delete('certificate_deployment_edit', 'temp');
 		$p->delete('certificate_log_add', 'temp');
+	}
 
-		return ['name' => $row['certificate_name'], 'target' => $row['deployment_target'], 'status' => $status, 'message' => $message];
+	/**
+	 * Writes the certificate where the root helper picks it up, and asks the helper to give it to nginx.
+	 *
+	 * The service runs as www-data and can neither write where nginx reads its certificate nor reload nginx.
+	 * Writing the request file wakes cert_manager_nginx.path, whose root helper checks the files, copies them
+	 * where nginx reads them and reloads nginx, putting everything back when nginx does not accept them. The
+	 * result is read back by check_nginx().
+	 *
+	 * @param string $certificate The certificate.
+	 * @param string $chain       Its intermediates.
+	 * @param string $private_key Its key.
+	 * @param string $serial      Its serial number.
+	 *
+	 * @return array The status and the message.
+	 * @throws Exception When a file cannot be written.
+	 */
+	private function deploy_nginx(string $certificate, string $chain, string $private_key, string $serial): array {
+		$store = rtrim($this->settings->get('cert_manager', 'store_dir', '/etc/fusionpbx/cert_manager'), '/');
+		foreach ([$store . '/live/nginx', $store . '/deploy'] as $directory) {
+			if (!is_dir($directory) || !is_writable($directory)) {
+				throw new Exception('the directory ' . $directory . ' does not exist or cannot be written; run the install script of the app');
+			}
+		}
+		self::write_file($store . '/live/nginx/fullchain.pem', $certificate . $chain, 0640);
+		self::write_file($store . '/live/nginx/privkey.pem', $private_key, 0600);
+		self::write_file($store . '/deploy/nginx.request', $serial . "\n", 0644);
+		return ['waiting', 'waiting for nginx to reload'];
+	}
+
+	/**
+	 * Reads the result of the root helper for every nginx deployment waiting for it.
+	 *
+	 * @return array The results that came in, as deploy() returns them.
+	 */
+	private function check_nginx(): array {
+		$sql = "select d.certificate_deployment_uuid, d.deployment_target, d.deployment_serial, d.deployment_date, ";
+		$sql .= "extract(epoch from (now() - d.deployment_date)) as waited, c.certificate_uuid, c.certificate_name ";
+		$sql .= "from v_certificate_deployments as d ";
+		$sql .= "join v_certificates as c on c.certificate_uuid = d.certificate_uuid ";
+		$sql .= "where d.deployment_target = 'nginx' ";
+		$sql .= "and d.deployment_status = 'waiting' ";
+		$rows = $this->database->select($sql, null, 'all');
+		unset($sql);
+
+		$results = [];
+		$store = rtrim($this->settings->get('cert_manager', 'store_dir', '/etc/fusionpbx/cert_manager'), '/');
+		foreach ($rows ?: [] as $row) {
+			$result = explode(' ', trim((string) @file_get_contents($store . '/deploy/nginx.result')), 3);
+			if (count($result) == 3 && $result[1] === $row['deployment_serial']) {
+				$status = $result[0] == 'ok' ? 'deployed' : 'failed';
+				$message = $result[2];
+			}
+			elseif ($row['waited'] > self::nginx_timeout) {
+				$status = 'failed';
+				$message = 'nginx was not reloaded within ' . self::nginx_timeout . ' seconds; check that cert_manager_nginx.path is enabled';
+			}
+			else {
+				continue;
+			}
+
+			//a failed deployment forgets its serial so it is tried again
+			$array = [];
+			if ($status == 'failed') {
+				$array['certificate_deployments'][0]['deployment_serial'] = null;
+			}
+			$this->record($row, $status, $message, $array);
+			$results[] = ['name' => $row['certificate_name'], 'target' => 'nginx', 'status' => $status, 'message' => $message];
+		}
+		return $results;
 	}
 
 	/**
