@@ -98,11 +98,13 @@ The first deployment to nginx points `/etc/ssl/certs/nginx.crt` and `/etc/ssl/pr
 the paths the stock config reads, at `/etc/ssl/cert_manager/`. The links they had before are kept
 beside them as `*.cert_manager.bak`.
 
-Before it changes anything, the deployment checks that the nginx configuration reads
-`/etc/ssl/certs/nginx.crt`. When it does not, the deployment fails and names the path nginx reads
-instead; reloading nginx would otherwise report success while it kept serving the old certificate.
-This is the case after the installer's `letsencrypt.sh` has run; see
-[Moving from the installer's Let's Encrypt](#moving-from-the-installers-lets-encrypt).
+The deployment also checks that the nginx configuration reads `/etc/ssl/certs/nginx.crt`. When it
+does not, as after the installer's `letsencrypt.sh` has run, it points the `ssl_certificate` and
+`ssl_certificate_key` lines of `/etc/nginx/sites-available/fusionpbx` back at the stock paths, and
+keeps the file as it was beside it as `fusionpbx.cert_manager.bak`. When nginx then refuses the
+configuration, or the site is not the one nginx reads, the file is put back, and the deployment
+fails and names the path nginx reads instead. Other files in `/etc/nginx` are never changed; when a
+server block in one of them reads another certificate, the deployment says so.
 
 ## FreeSWITCH TLS
 
@@ -131,27 +133,15 @@ other's files in `/etc/freeswitch/tls`.
 
 1. Find the names dehydrated covers in `/etc/dehydrated/domains.txt`. A line such as
    `*.example.com > example.com` is a wildcard for `example.com`.
-2. Point nginx back at the paths the certificate manager manages, as root, and check the result:
-
-   ```sh
-   sed -i \
-     -e 's@ssl_certificate[ \t]*/etc/dehydrated/certs/[^;]*/fullchain.pem;@ssl_certificate /etc/ssl/certs/nginx.crt;@' \
-     -e 's@ssl_certificate_key[ \t]*/etc/dehydrated/certs/[^;]*/privkey.pem;@ssl_certificate_key /etc/ssl/private/nginx.key;@' \
-     /etc/nginx/sites-available/fusionpbx
-   grep -n ssl_certificate /etc/nginx/sites-available/fusionpbx
-   nginx -t
-   ```
-
-   Do not reload nginx yet. Until the first deployment, `/etc/ssl/certs/nginx.crt` is still the
-   self-signed certificate; the deployment reloads nginx once the new certificate is in place.
-3. Add an ACME account and a certificate for those names, as in
+2. Add an ACME account and a certificate for those names, as in
    [Getting a certificate for the web UI](#getting-a-certificate-for-the-web-ui), with the
    **Web UI (nginx)** and **FreeSWITCH TLS** deployments. A wildcard needs dns-01. Ordering a new
    certificate for names that already have one is allowed; Let's Encrypt only limits it to five
-   identical sets of names a week.
-4. When the nginx deployment shows **Deployed**, press **Restart** on the FreeSWITCH TLS
+   identical sets of names a week. The first nginx deployment points
+   `/etc/nginx/sites-available/fusionpbx` back from `/etc/dehydrated` to the stock paths.
+3. When the nginx deployment shows **Deployed**, press **Restart** on the FreeSWITCH TLS
    deployment. The installer's files are kept in `/etc/freeswitch/tls/cert_manager.bak`.
-5. Stop dehydrated renewing. The installer does not schedule it, so look for whatever was added
+4. Stop dehydrated renewing. The installer does not schedule it, so look for whatever was added
    by hand, and remove the line that runs `dehydrated`:
 
    ```sh
@@ -160,9 +150,6 @@ other's files in `/etc/freeswitch/tls`.
    ```
 
    `/etc/dehydrated` can be removed once you are happy with the new certificate.
-
-If the nginx deployment ran before step 2, it shows **Failed** with the path nginx reads. Nothing
-was changed, and it is tried again within the hour.
 
 ## STIR/SHAKEN
 
@@ -339,6 +326,10 @@ mv /etc/ssl/certs/nginx.crt.cert_manager.bak /etc/ssl/certs/nginx.crt
 mv /etc/ssl/private/nginx.key.cert_manager.bak /etc/ssl/private/nginx.key
 nginx -t && systemctl reload nginx
 ```
+
+When the first deployment had to rewrite `/etc/nginx/sites-available/fusionpbx`, the file it
+replaced is `/etc/nginx/sites-available/fusionpbx.cert_manager.bak`; move it back before the reload
+to read the certificate from where it was read before, such as `/etc/dehydrated`.
 
 ---
 

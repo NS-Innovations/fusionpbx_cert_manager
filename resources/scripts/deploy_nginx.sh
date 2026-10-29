@@ -28,7 +28,9 @@
 # service, which runs as www-data, asks for nginx to use a new certificate.
 #
 # It first checks that nginx reads its certificate from the paths it manages.
-# It then only ever reads the two files the service wrote, copies them into a
+# When it does not, as after the installer's letsencrypt.sh, the certificate
+# lines of the FusionPBX site are pointed back at those paths, keeping the file
+# as it was beside it. It then only ever reads the two files the service wrote, copies them into a
 # directory only root can write once they prove to be a matching certificate
 # and key, points nginx at those copies, and reloads nginx. When nginx does not
 # accept the new certificate, everything is put back as it was. The result is
@@ -45,6 +47,7 @@
 	ssl=/etc/ssl/cert_manager
 	nginx_crt=/etc/ssl/certs/nginx.crt
 	nginx_key=/etc/ssl/private/nginx.key
+	site=/etc/nginx/sites-available/fusionpbx
 
 #read the serial number the service asked for
 	serial=$(head -c 128 "$deploy/nginx.request" 2>/dev/null | tr -cd 'a-f0-9')
@@ -59,21 +62,31 @@
 	}
 
 #list the certificate and key paths in the nginx configuration files, without comments or quotes
+	read_paths() {
+		paths=$(printf '%s\n' "$1" | awk '{ sub(/^[ \t]+/, "") } /^#/ { next } $1 == "ssl_certificate" || $1 == "ssl_certificate_key" { v = $2; sub(/;.*$/, "", v); gsub(/["\047]/, "", v); print $1 " " v }')
+		managed="ssl_certificate $nginx_crt
+ssl_certificate $ssl/nginx.crt
+ssl_certificate_key $nginx_key
+ssl_certificate_key $ssl/nginx.key"
+		other=$(printf '%s\n' "$paths" | grep -vxF "$managed" | head -n 1 | cut -d ' ' -f 2)
+	}
+	reads_managed() {
+		printf '%s\n' "$paths" | grep -qxF -e "ssl_certificate $nginx_crt" -e "ssl_certificate $ssl/nginx.crt"
+	}
 	if ! config=$(nginx -T 2>&1); then
 		write_result failed "nginx did not accept its configuration: $(printf '%s' "$config" | grep -m1 emerg | tr -d '\n' | cut -c1-200)"
 		exit 1
 	fi
-	paths=$(printf '%s\n' "$config" | awk '{ sub(/^[ \t]+/, "") } /^#/ { next } $1 == "ssl_certificate" || $1 == "ssl_certificate_key" { v = $2; sub(/;.*$/, "", v); gsub(/["\047]/, "", v); print $1 " " v }')
-	managed="ssl_certificate $nginx_crt
-ssl_certificate $ssl/nginx.crt
-ssl_certificate_key $nginx_key
-ssl_certificate_key $ssl/nginx.key"
-	other=$(printf '%s\n' "$paths" | grep -vxF "$managed" | head -n 1 | cut -d ' ' -f 2)
+	read_paths "$config"
 
-#refuse when nginx reads its certificate from somewhere else, as it does after the installer's letsencrypt.sh, since a reload would change nothing
-	if ! printf '%s\n' "$paths" | grep -qxF -e "ssl_certificate $nginx_crt" -e "ssl_certificate $ssl/nginx.crt"; then
-		write_result failed "nginx does not read $nginx_crt${other:+ (it reads $other)}; point ssl_certificate and ssl_certificate_key at $nginx_crt and $nginx_key"
-		exit 1
+#when nginx reads its certificate from somewhere else, as it does after the installer's letsencrypt.sh, the site has to be rewritten, since a reload would change nothing
+	rewrite=
+	if ! reads_managed; then
+		if [ ! -f "$site" ] || ! grep -Eq '^[[:space:]]*ssl_certificate[[:space:]]' "$site"; then
+			write_result failed "nginx does not read $nginx_crt${other:+ (it reads $other)}, and $site has no ssl_certificate to point at it; point ssl_certificate and ssl_certificate_key at $nginx_crt and $nginx_key"
+			exit 1
+		fi
+		rewrite=true
 	fi
 
 #copy the files into the root owned directory under new names
@@ -100,6 +113,16 @@ ssl_certificate_key $ssl/nginx.key"
 	mv -f "$ssl/nginx.crt.new" "$ssl/nginx.crt"
 	mv -f "$ssl/nginx.key.new" "$ssl/nginx.key"
 
+#point the certificate lines of the site at the managed paths, keeping the file as it was before the first time
+	if [ -n "$rewrite" ]; then
+		cp -p "$site" "$ssl/fusionpbx.prev"
+		[ -e "$site.cert_manager.bak" ] || cp -p "$site" "$site.cert_manager.bak"
+		sed -E -i --follow-symlinks \
+			-e "s@^([[:space:]]*)ssl_certificate[[:space:]]+[^;]*;@\\1ssl_certificate         $nginx_crt;@" \
+			-e "s@^([[:space:]]*)ssl_certificate_key[[:space:]]+[^;]*;@\\1ssl_certificate_key     $nginx_key;@" \
+			"$site"
+	fi
+
 #point nginx at the copies the first time, keeping where it pointed before
 	for pair in "$nginx_crt:$ssl/nginx.crt" "$nginx_key:$ssl/nginx.key"; do
 		link=${pair%%:*}
@@ -112,11 +135,8 @@ ssl_certificate_key $ssl/nginx.key"
 		fi
 	done
 
-#reload nginx, or put everything back when it does not accept the certificate
-	if output=$(nginx -t 2>&1); then
-		systemctl reload nginx
-		write_result ok "nginx reloaded${other:+, but some server blocks still read $other}"
-	else
+#put everything back as it was
+	put_back() {
 		if [ -f "$ssl/nginx.crt.prev" ]; then
 			mv -f "$ssl/nginx.crt.prev" "$ssl/nginx.crt"
 			mv -f "$ssl/nginx.key.prev" "$ssl/nginx.key"
@@ -125,6 +145,33 @@ ssl_certificate_key $ssl/nginx.key"
 				[ -e "$link.cert_manager.bak" ] || [ -L "$link.cert_manager.bak" ] && mv -f "$link.cert_manager.bak" "$link"
 			done
 		fi
+		if [ -n "$rewrite" ]; then
+			cp -p "$ssl/fusionpbx.prev" "$site"
+			rm -f "$ssl/fusionpbx.prev"
+		fi
+	}
+
+#check nginx reads the managed paths now the site is rewritten, which it does not when the site is not enabled
+	if [ -n "$rewrite" ] && config=$(nginx -T 2>&1); then
+		read_paths "$config"
+		if ! reads_managed; then
+			put_back
+			write_result failed "nginx does not read $nginx_crt${other:+ (it reads $other)}, even with $site pointed at it; point ssl_certificate and ssl_certificate_key at $nginx_crt and $nginx_key"
+			exit 1
+		fi
+	fi
+
+#reload nginx, or put everything back when it does not accept the certificate
+	if output=$(nginx -t 2>&1); then
+		systemctl reload nginx
+		if [ -n "$rewrite" ]; then
+			rm -f "$ssl/fusionpbx.prev"
+			write_result ok "nginx reloaded; $site now reads $nginx_crt and $nginx_key, and was kept as it was in $site.cert_manager.bak${other:+, but some server blocks still read $other}"
+		else
+			write_result ok "nginx reloaded${other:+, but some server blocks still read $other}"
+		fi
+	else
+		put_back
 		write_result failed "nginx did not accept the certificate: $(printf '%s' "$output" | grep -m1 emerg | tr -d '\n' | cut -c1-200)"
 		exit 1
 	fi

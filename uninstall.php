@@ -253,6 +253,7 @@
 	echo "to the certificate it used before the app, put the links it kept back and reload nginx:\n";
 	echo "  mv /etc/ssl/certs/nginx.crt.cert_manager.bak /etc/ssl/certs/nginx.crt\n";
 	echo "  mv /etc/ssl/private/nginx.key.cert_manager.bak /etc/ssl/private/nginx.key\n";
+	echo "  [ -f /etc/nginx/sites-available/fusionpbx.cert_manager.bak ] && mv /etc/nginx/sites-available/fusionpbx.cert_manager.bak /etc/nginx/sites-available/fusionpbx\n";
 	echo "  nginx -t && systemctl reload nginx\n";
 	echo "\n";
 	echo "The app directory can now be deleted:\n";
