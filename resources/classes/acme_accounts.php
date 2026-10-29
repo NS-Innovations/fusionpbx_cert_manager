@@ -88,6 +88,62 @@ class acme_accounts {
 	}
 
 	/**
+	 * Registers an account with its certificate authority, or brings the contact of a registered one up to date.
+	 *
+	 * The account key is created the first time. Registering a key that is already registered finds the
+	 * existing account, so calling this again is harmless.
+	 *
+	 * @param string             $acme_account_uuid The account.
+	 * @param cert_manager_crypto $crypto            Decrypts and encrypts the stored secrets.
+	 *
+	 * @return string The status of the account at the certificate authority.
+	 * @throws Exception When the account is missing or the certificate authority refuses it.
+	 */
+	public function register(string $acme_account_uuid, cert_manager_crypto $crypto): string {
+		//get the account
+		$sql = "select acme_account_directory, acme_account_email, acme_account_eab_kid, acme_account_eab_hmac, ";
+		$sql .= "acme_account_key, acme_account_url ";
+		$sql .= "from v_acme_accounts ";
+		$sql .= "where acme_account_uuid = :acme_account_uuid ";
+		$parameters['acme_account_uuid'] = $acme_account_uuid;
+		$row = $this->database->select($sql, $parameters, 'row');
+		unset($sql, $parameters);
+		if (!is_array($row) || @sizeof($row) == 0) {
+			throw new Exception('the account does not exist');
+		}
+
+		//create the account key the first time
+		$array = [];
+		$account_key = $crypto->decrypt($row['acme_account_key']);
+		if ($account_key === '') {
+			$account_key = acme_client::generate_key('ec-256');
+			$array['acme_accounts'][0]['acme_account_key'] = $crypto->encrypt($account_key);
+		}
+
+		//register the account, or update its contact
+		$client = new acme_client($row['acme_account_directory'], $account_key, (string) $row['acme_account_url']);
+		if (empty($row['acme_account_url'])) {
+			$result = $client->register((string) $row['acme_account_email'], (string) $row['acme_account_eab_kid'], $crypto->decrypt($row['acme_account_eab_hmac']));
+			$array['acme_accounts'][0]['acme_account_url'] = $result['url'];
+			$status = $result['status'];
+		}
+		else {
+			$status = $client->update_contact((string) $row['acme_account_email']);
+		}
+
+		//save the result
+		$array['acme_accounts'][0]['acme_account_uuid'] = $acme_account_uuid;
+		$array['acme_accounts'][0]['acme_account_status'] = $status;
+		$p = permissions::new();
+		$p->add('acme_account_edit', 'temp');
+		$this->database->save($array);
+		$p->delete('acme_account_edit', 'temp');
+		unset($array);
+
+		return $status;
+	}
+
+	/**
 	 * Deletes one or more accounts. An account still used by a certificate is kept.
 	 *
 	 * @param array $records An array of record IDs to delete, where each ID is an associative array

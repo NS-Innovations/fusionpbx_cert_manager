@@ -9,8 +9,8 @@ $text['title-acme_account']['en-gb'] = "ACME Account";
 $text['description-acme_accounts']['en-us'] = "An ACME account registers this server with a certificate authority such as Let's Encrypt. Every certificate ordered over ACME is ordered through one of these accounts.";
 $text['description-acme_accounts']['en-gb'] = "An ACME account registers this server with a certificate authority such as Let's Encrypt. Every certificate ordered over ACME is ordered through one of these accounts.";
 
-$text['description-acme_account']['en-us'] = "Choose the certificate authority the account belongs to and how it can reach you.";
-$text['description-acme_account']['en-gb'] = "Choose the certificate authority the account belongs to and how it can reach you.";
+$text['description-acme_account']['en-us'] = "The account is registered with the certificate authority when it is saved, and its contact is brought up to date on every later save.";
+$text['description-acme_account']['en-gb'] = "The account is registered with the certificate authority when it is saved, and its contact is brought up to date on every later save.";
 
 $text['label-acme_account_directory']['en-us'] = "Certificate Authority";
 $text['label-acme_account_directory']['en-gb'] = "Certificate Authority";
@@ -86,5 +86,26 @@ $text['message-acme_account_email_invalid']['en-gb'] = "The email address is not
 
 $text['message-key_file_missing']['en-us'] = "The key file that encrypts the stored secrets cannot be read. Run the install script of the app as root.";
 $text['message-key_file_missing']['en-gb'] = "The key file that encrypts the stored secrets cannot be read. Run the install script of the app as root.";
+
+$text['label-acme_account_agree']['en-us'] = "Terms of Service";
+$text['label-acme_account_agree']['en-gb'] = "Terms of Service";
+
+$text['option-acme_account_agree']['en-us'] = "I agree to the terms of service of the certificate authority";
+$text['option-acme_account_agree']['en-gb'] = "I agree to the terms of service of the certificate authority";
+
+$text['label-acme_account_terms']['en-us'] = "Read the terms";
+$text['label-acme_account_terms']['en-gb'] = "Read the terms";
+
+$text['description-acme_account_agree']['en-us'] = "The certificate authority only registers an account whose owner agrees to its terms of service.";
+$text['description-acme_account_agree']['en-gb'] = "The certificate authority only registers an account whose owner agrees to its terms of service.";
+
+$text['message-acme_account_agree_required']['en-us'] = "The terms of service of the certificate authority must be agreed to before the account can be registered.";
+$text['message-acme_account_agree_required']['en-gb'] = "The terms of service of the certificate authority must be agreed to before the account can be registered.";
+
+$text['message-acme_account_registered']['en-us'] = "The account is registered with the certificate authority.";
+$text['message-acme_account_registered']['en-gb'] = "The account is registered with the certificate authority.";
+
+$text['message-acme_account_register_failed']['en-us'] = "The certificate authority did not register the account:";
+$text['message-acme_account_register_failed']['en-gb'] = "The certificate authority did not register the account:";
 
 ?>

@@ -70,6 +70,7 @@
 		$acme_account_eab_hmac = trim($_POST['acme_account_eab_hmac'] ?? '');
 		$acme_account_enabled = $_POST['acme_account_enabled'] ?? 'false';
 		$acme_account_description = $_POST['acme_account_description'] ?? '';
+		$acme_account_agree = $_POST['acme_account_agree'] ?? '';
 	}
 
 //process the http post data
@@ -100,6 +101,8 @@
 			if (!preg_match('#^https://[^\s/]+(/\S*)?$#', $acme_account_directory)) { $msg .= $text['message-acme_account_directory_invalid']."<br>\n"; }
 			if (!empty($acme_account_email) && !valid_email($acme_account_email)) { $msg .= $text['message-acme_account_email_invalid']."<br>\n"; }
 			if (!empty($acme_account_eab_hmac) && empty($acme_account_eab_kid)) { $msg .= $text['message-required']." ".$text['label-acme_account_eab_kid']."<br>\n"; }
+			$registered = !empty($saved['acme_account_url']) && ($saved['acme_account_directory'] ?? '') === $acme_account_directory;
+			if (!$registered && $acme_account_enabled == 'true' && $acme_account_agree != 'true') { $msg .= $text['message-acme_account_agree_required']."<br>\n"; }
 			if (!empty($msg) && empty($_POST["persistformvar"])) {
 				require_once "resources/header.php";
 				require_once "resources/persist_form_var.php";
@@ -157,6 +160,18 @@
 				message::add($text['message-update']);
 			}
 
+		//register the account with the certificate authority, or update its contact
+			if ($acme_account_enabled == 'true') {
+				try {
+					$obj = new acme_accounts;
+					$obj->register($acme_account_uuid, new cert_manager_crypto(['settings' => $settings]));
+					message::add($text['message-acme_account_registered']);
+				}
+				catch (Exception $e) {
+					message::add($text['message-acme_account_register_failed'].' '.escape($e->getMessage()), 'negative', 7000);
+				}
+			}
+
 		//redirect the browser
 			header("Location: acme_account_edit.php?id=".urlencode($acme_account_uuid));
 			exit;
@@ -187,6 +202,19 @@
 
 //find the preset of the directory
 	$acme_account_directory_preset = in_array($acme_account_directory, acme_accounts::presets(), true) ? $acme_account_directory : '';
+
+//get the terms of service of the certificate authority, which have to be agreed to before registering
+	$terms_of_service = '';
+	if (empty($acme_account_url)) {
+		try {
+			$client = new acme_client($acme_account_directory);
+			$terms_of_service = $client->terms_of_service();
+		}
+		catch (Exception $e) {
+			$terms_of_service = '';
+		}
+		unset($client);
+	}
 
 //create token
 	$object = new token;
@@ -264,6 +292,20 @@
 	echo "	".$text['description-acme_account_eab_hmac']."\n";
 	echo "</td>\n";
 	echo "</tr>\n";
+
+	if (empty($acme_account_url)) {
+		echo "<tr>\n";
+		echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-acme_account_agree']."</td>\n";
+		echo "<td class='vtable' align='left'>\n";
+		echo "	<label><input type='checkbox' name='acme_account_agree' value='true'> ".$text['option-acme_account_agree']."</label>\n";
+		if (!empty($terms_of_service)) {
+			echo "	<a href='".escape($terms_of_service)."' target='_blank' rel='noopener noreferrer'>".$text['label-acme_account_terms']."</a>\n";
+		}
+		echo "	<br />\n";
+		echo "	".$text['description-acme_account_agree']."\n";
+		echo "</td>\n";
+		echo "</tr>\n";
+	}
 
 	if ($action == 'update') {
 		echo "<tr>\n";
