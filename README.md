@@ -109,6 +109,11 @@ the app never does it by itself. The deployment shows **Restart needed** with a 
 Put the profile names in **Options**, separated by commas, to choose which profiles it restarts;
 left blank, it restarts every running profile that reports a TLS or WSS address.
 
+TLS is off on a stock install. To turn it on for a profile, set `external_ssl_enable` or
+`internal_ssl_enable` to `true` under **Advanced > Variables**, then clear the cache under
+**Status > SIP Status** before restarting. FusionPBX serves `sofia.conf` from its cache, so without
+that the profile restarts with the old value and does not listen for TLS.
+
 ## STIR/SHAKEN
 
 STIR/SHAKEN certificates are issued by an STI-CA against an SPC token from the STI-PA, not by
