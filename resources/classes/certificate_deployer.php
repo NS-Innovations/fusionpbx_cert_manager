@@ -326,7 +326,7 @@ class certificate_deployer {
 		}
 
 		//the profiles named in the options, or every running profile using tls
-		$profiles = preg_split('/[\s,;]+/', (string) $row['deployment_options'], -1, PREG_SPLIT_NO_EMPTY);
+		$profiles = array_values(array_unique(preg_split('/[\s,;]+/', (string) $row['deployment_options'], -1, PREG_SPLIT_NO_EMPTY)));
 		foreach ($profiles as $profile) {
 			if (!preg_match('/^[A-Za-z0-9_.-]+$/', $profile)) {
 				throw new Exception('not a SIP profile name: ' . $profile);
@@ -337,8 +337,9 @@ class certificate_deployer {
 			if ($status === false) {
 				throw new Exception('the switch could not be reached');
 			}
+			//a profile with tls is listed once for each of its addresses, so take each name once
 			preg_match_all('/^\s*(\S+)\s+profile\s+\S+\s+RUNNING/m', $status, $matches);
-			foreach ($matches[1] as $profile) {
+			foreach (array_unique($matches[1]) as $profile) {
 				$details = (string) event_socket::api('sofia status profile ' . $profile);
 				if (preg_match('/^(TLS-URL|WSS-BIND-URL)\s/m', $details)) {
 					$profiles[] = $profile;
