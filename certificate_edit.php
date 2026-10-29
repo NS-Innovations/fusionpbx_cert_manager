@@ -48,6 +48,7 @@
 	$dns_provider_uuid = '';
 	$certificate_key_type = 'ec-256';
 	$certificate_renew_days = '';
+	$certificate_publish = 'false';
 	$certificate_enabled = 'true';
 	$certificate_description = '';
 	$certificate_pem = '';
@@ -96,6 +97,7 @@
 		$dns_provider_uuid = $_POST['dns_provider_uuid'] ?? '';
 		$certificate_key_type = $_POST['certificate_key_type'] ?? '';
 		$certificate_renew_days = trim($_POST['certificate_renew_days'] ?? '');
+		$certificate_publish = ($_POST['certificate_publish'] ?? '') == 'true' ? 'true' : 'false';
 		$certificate_enabled = $_POST['certificate_enabled'] ?? 'false';
 		$certificate_description = $_POST['certificate_description'] ?? '';
 		$certificate_renew_now = ($_POST['certificate_renew_now'] ?? '') == 'true';
@@ -197,6 +199,9 @@
 			$array['certificates'][0]['certificate_source'] = $certificate_source;
 			$array['certificates'][0]['certificate_enabled'] = $certificate_enabled;
 			$array['certificates'][0]['certificate_description'] = $certificate_description;
+			if (permission_exists('certificate_publish')) {
+				$array['certificates'][0]['certificate_publish'] = $certificate_publish;
+			}
 			$order_requested = false;
 			if ($certificate_source == 'acme') {
 				$array['certificates'][0]['certificate_domains'] = $certificate_domains;
@@ -326,7 +331,7 @@
 		$sql .= "floor(extract(epoch from (certificate_not_after - now())) / 86400) as days_left, ";
 		$sql .= "certificate_status, certificate_message, cast(certificate_renew as text) as certificate_renew, ";
 		$sql .= "to_char(certificate_next_attempt, 'YYYY-MM-DD HH24:MI') as certificate_next_attempt, ";
-		$sql .= "certificate_pem, certificate_chain, certificate_order, ";
+		$sql .= "certificate_pem, certificate_chain, certificate_order, cast(certificate_publish as text) as certificate_publish, ";
 		$sql .= "cast(certificate_enabled as text) as certificate_enabled, certificate_description ";
 		$sql .= "from v_certificates ";
 		$sql .= "where certificate_uuid = :certificate_uuid ";
@@ -342,6 +347,7 @@
 			$dns_provider_uuid = $row["dns_provider_uuid"];
 			$certificate_key_type = $row["certificate_key_type"];
 			$certificate_renew_days = $row["certificate_renew_days"];
+			$certificate_publish = $row["certificate_publish"] == 'true' ? 'true' : 'false';
 			$certificate_enabled = $row["certificate_enabled"];
 			$certificate_description = $row["certificate_description"];
 			$certificate_pem = $row["certificate_source"] == 'import' ? trim($row["certificate_pem"]."\n".$row["certificate_chain"])."\n" : '';
@@ -670,6 +676,24 @@
 		echo "	</table>\n";
 		echo "	<br />\n";
 		echo "	".$text['description-certificate_deployments']."\n";
+		echo "</td>\n";
+		echo "</tr>\n";
+	}
+
+	if (permission_exists('certificate_publish')) {
+		echo "<tr>\n";
+		echo "<td class='vncell' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_publish']."</td>\n";
+		echo "<td class='vtable' align='left'>\n";
+		echo "	<select class='formfld' name='certificate_publish'>\n";
+		echo "		<option value='false' ".($certificate_publish != 'true' ? "selected='selected'" : null).">".$text['option-false']."</option>\n";
+		echo "		<option value='true' ".($certificate_publish == 'true' ? "selected='selected'" : null).">".$text['option-true']."</option>\n";
+		echo "	</select>\n";
+		if ($action == 'update' && $certificate_publish == 'true') {
+			$publish_url = 'https://'.$_SERVER['HTTP_HOST'].PROJECT_PATH.'/app/cert_manager/x5u.php?id='.urlencode($certificate_uuid);
+			echo "	<br /><span style='font-family: monospace;'>".escape($publish_url)."</span>\n";
+		}
+		echo "	<br />\n";
+		echo "	".$text['description-certificate_publish']."\n";
 		echo "</td>\n";
 		echo "</tr>\n";
 	}

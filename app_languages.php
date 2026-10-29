@@ -372,4 +372,10 @@ $text['option-deployment_status_waiting']['en-gb'] = "Waiting for nginx";
 $text['option-deployment_target_identity']['en-us'] = "STIR/SHAKEN (identity app)";
 $text['option-deployment_target_identity']['en-gb'] = "STIR/SHAKEN (identity app)";
 
+$text['label-certificate_publish']['en-us'] = "Publish";
+$text['label-certificate_publish']['en-gb'] = "Publish";
+
+$text['description-certificate_publish']['en-us'] = "Select whether the certificate and its intermediates are served without a login at the URL shown, which is what STIR/SHAKEN needs: set identity.certificate_url of the identity app to this URL so it goes in the x5u of every signature. The private key is never published.";
+$text['description-certificate_publish']['en-gb'] = "Select whether the certificate and its intermediates are served without a login at the URL shown, which is what STIR/SHAKEN needs: set identity.certificate_url of the identity app to this URL so it goes in the x5u of every signature. The private key is never published.";
+
 ?>
