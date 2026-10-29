@@ -345,8 +345,8 @@ $text['label-deployment_target']['en-gb'] = "Target";
 $text['label-deployment_options']['en-us'] = "Options";
 $text['label-deployment_options']['en-gb'] = "Options";
 
-$text['description-certificate_deployments']['en-us'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart.";
-$text['description-certificate_deployments']['en-gb'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart.";
+$text['description-certificate_deployments']['en-us'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart. STIR/SHAKEN writes the key and certificate the identity app signs calls with.";
+$text['description-certificate_deployments']['en-gb'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart. STIR/SHAKEN writes the key and certificate the identity app signs calls with.";
 
 $text['option-deployment_target_freeswitch']['en-us'] = "FreeSWITCH TLS";
 $text['option-deployment_target_freeswitch']['en-gb'] = "FreeSWITCH TLS";
@@ -368,5 +368,8 @@ $text['option-deployment_target_nginx']['en-gb'] = "Web UI (nginx)";
 
 $text['option-deployment_status_waiting']['en-us'] = "Waiting for nginx";
 $text['option-deployment_status_waiting']['en-gb'] = "Waiting for nginx";
+
+$text['option-deployment_target_identity']['en-us'] = "STIR/SHAKEN (identity app)";
+$text['option-deployment_target_identity']['en-gb'] = "STIR/SHAKEN (identity app)";
 
 ?>

@@ -45,7 +45,7 @@ class certificate_deployer {
 	 * the targets a certificate can be deployed to
 	 * @var array
 	 */
-	const targets = ['nginx', 'freeswitch'];
+	const targets = ['nginx', 'freeswitch', 'identity'];
 
 	/**
 	 * how long to wait for the root helper to reload nginx before giving up, in seconds
@@ -131,6 +131,9 @@ class certificate_deployer {
 					break;
 				case 'freeswitch':
 					[$status, $message] = $this->deploy_freeswitch($certificate, $chain, $private_key);
+					break;
+				case 'identity':
+					[$status, $message] = $this->deploy_identity($certificate, $chain, $private_key);
 					break;
 				default:
 					throw new Exception('unknown target ' . $row['deployment_target']);
@@ -296,6 +299,33 @@ class certificate_deployer {
 			self::write_file($directory . '/' . $name, $content, 0640);
 		}
 		return ['restart', 'written to ' . $directory . '; takes effect when the SIP profiles using TLS restart'];
+	}
+
+	/**
+	 * Writes a STIR/SHAKEN certificate where the identity app reads it.
+	 *
+	 * The identity app signs with ES256, so only a P-256 key is accepted. The file names are the defaults of
+	 * the identity app; its certificate_url, which goes in the x5u of every signature, has to point at where
+	 * the certificate is published.
+	 *
+	 * @param string $certificate The certificate.
+	 * @param string $chain       Its intermediates.
+	 * @param string $private_key Its key.
+	 *
+	 * @return array The status and the message.
+	 * @throws Exception When the key is not P-256 or a file cannot be written.
+	 */
+	private function deploy_identity(string $certificate, string $chain, string $private_key): array {
+		if (cert_manager_pem::key_type($private_key) != 'ec-256') {
+			throw new Exception('STIR/SHAKEN signs with ES256, which needs an ECDSA P-256 key');
+		}
+		$directory = rtrim($this->settings->get('cert_manager', 'identity_dir', '/etc/fusionpbx/certs'), '/');
+		if (!is_dir($directory) || !is_writable($directory)) {
+			throw new Exception('the directory ' . $directory . ' does not exist or cannot be written; run the install script of the app');
+		}
+		self::write_file($directory . '/identity_private.key', $private_key, 0600);
+		self::write_file($directory . '/identity_certificate.pem', $certificate . $chain, 0644);
+		return ['deployed', 'written to ' . $directory];
 	}
 
 	/**
