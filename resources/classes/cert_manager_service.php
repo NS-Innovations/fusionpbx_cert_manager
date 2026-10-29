@@ -154,6 +154,10 @@ class cert_manager_service extends service {
 	/**
 	 * Takes every certificate that needs it one step further.
 	 *
+	 * A certificate is due when fewer than its renew days are left, but never earlier than half way through its
+	 * life. Without that, renew days longer than the certificate lasts, such as 60 days for a 45 day
+	 * certificate, would make every new certificate due the moment it is issued and renew it over and over.
+	 *
 	 * @return void
 	 */
 	private function order_certificates(): void {
@@ -166,7 +170,7 @@ class cert_manager_service extends service {
 		$sql .= "	c.certificate_order is not null ";
 		$sql .= "	or c.certificate_renew = true ";
 		$sql .= "	or (";
-		$sql .= "		(c.certificate_not_after is null or c.certificate_not_after < now() + make_interval(days => coalesce(c.certificate_renew_days, :renew_days)::int)) ";
+		$sql .= "		(c.certificate_not_after is null or c.certificate_not_after < now() + least(make_interval(days => coalesce(c.certificate_renew_days, :renew_days)::int), (c.certificate_not_after - c.certificate_not_before) / 2)) ";
 		$sql .= "		and (c.certificate_next_attempt is null or c.certificate_next_attempt <= now()) ";
 		$sql .= "	) ";
 		$sql .= ") ";
@@ -246,7 +250,8 @@ class cert_manager_service extends service {
 
 		$sql = "select certificate_uuid, certificate_name, certificate_source, certificate_domains, certificate_renew_days, certificate_warned, ";
 		$sql .= "to_char(certificate_not_after, 'YYYY-MM-DD HH24:MI') as expires, ";
-		$sql .= "floor(extract(epoch from (certificate_not_after - now())) / 86400) as days_left ";
+		$sql .= "floor(extract(epoch from (certificate_not_after - now())) / 86400) as days_left, ";
+		$sql .= "floor(extract(epoch from (certificate_not_after - certificate_not_before)) / 86400 / 2) as half_life ";
 		$sql .= "from v_certificates ";
 		$sql .= "where certificate_enabled = true ";
 		$sql .= "and certificate_not_after is not null ";
@@ -259,7 +264,7 @@ class cert_manager_service extends service {
 			$days_left = (int) $certificate['days_left'];
 
 			//an acme certificate is only a concern once its renewal is overdue
-			$renew_days = (int) ($certificate['certificate_renew_days'] ?: $this->renew_days);
+			$renew_days = min((int) ($certificate['certificate_renew_days'] ?: $this->renew_days), (int) $certificate['half_life']);
 			if ($certificate['certificate_source'] == 'acme' && $days_left >= $renew_days) {
 				continue;
 			}

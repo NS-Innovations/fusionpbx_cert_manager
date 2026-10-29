@@ -225,7 +225,7 @@ Under **Advanced > Default Settings**, category `cert_manager`:
 |-----------------------|----------------------------------------|---------|
 | `enabled`             | `true`                                 | Turns the service off without stopping it. |
 | `interval`            | `60`                                   | Seconds between passes. A renewal asked for from the web UI starts within this time. |
-| `renew_days`          | `30`                                   | Days before expiry an ACME certificate is renewed, unless it sets its own. |
+| `renew_days`          | `30`                                   | Days before expiry an ACME certificate is renewed, unless it sets its own. Never earlier than half way through the life of the certificate. |
 | `http_challenge_dir`  | `/var/www/dehydrated`                  | The directory nginx serves at `/.well-known/acme-challenge`. |
 | `store_dir`           | `/etc/fusionpbx/cert_manager`          | Where the service hands certificates to the nginx helper. The helper has this path built in. |
 | `key_file`            | `/etc/fusionpbx/cert_manager.key`      | The key that encrypts the stored secrets. |
