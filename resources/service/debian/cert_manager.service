@@ -1,0 +1,26 @@
+; Author: Mark J Crane <markjcrane@fusionpbx.com>
+; cp /var/www/fusionpbx/app/cert_manager/resources/service/debian/cert_manager.service /etc/systemd/system/cert_manager.service
+; systemctl daemon-reload
+; systemctl enable cert_manager
+; systemctl start cert_manager
+
+[Unit]
+Description=FusionPBX Certificate Manager
+Wants=network-online.target
+Requires=network.target local-fs.target
+After=network.target network-online.target local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=/var/www/fusionpbx
+ExecStart=/usr/bin/php /var/www/fusionpbx/app/cert_manager/resources/service/cert_manager.php
+RuntimeDirectory=fusionpbx
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+User=www-data
+Group=www-data
+TimeoutSec=55s
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
