@@ -212,6 +212,145 @@ class acme_client {
 	}
 
 	/**
+	 * Creates an order for a list of names.
+	 *
+	 * @param array $domains The names; a wildcard keeps its "*." prefix.
+	 *
+	 * @return array The order, with its URL added under 'url'.
+	 * @throws Exception When the authority refuses the order.
+	 */
+	public function new_order(array $domains): array {
+		$identifiers = [];
+		foreach ($domains as $domain) {
+			$identifiers[] = ['type' => 'dns', 'value' => $domain];
+		}
+		$response = $this->post($this->directory()['newOrder'], ['identifiers' => $identifiers]);
+		if ($response['status'] != 201 || !is_array($response['json']) || empty($response['headers']['location'])) {
+			throw new Exception($this->problem($response, 'the order could not be created'));
+		}
+		return array_merge($response['json'], ['url' => $response['headers']['location']]);
+	}
+
+	/**
+	 * Fetches an order, an authorization or a challenge.
+	 *
+	 * @param string $url The URL of the object.
+	 *
+	 * @return array The object.
+	 * @throws Exception When the object cannot be fetched.
+	 */
+	public function get(string $url): array {
+		$response = $this->post($url, null);
+		if ($response['status'] != 200 || !is_array($response['json'])) {
+			throw new Exception($this->problem($response, 'the ACME object could not be fetched'));
+		}
+		return $response['json'];
+	}
+
+	/**
+	 * Tells the authority a challenge is ready to be checked.
+	 *
+	 * @param string $url The URL of the challenge.
+	 *
+	 * @return array The challenge.
+	 * @throws Exception When the authority refuses.
+	 */
+	public function respond(string $url): array {
+		$response = $this->post($url, []);
+		if ($response['status'] != 200 || !is_array($response['json'])) {
+			throw new Exception($this->problem($response, 'the challenge could not be answered'));
+		}
+		return $response['json'];
+	}
+
+	/**
+	 * Finalizes an order with the certificate signing request.
+	 *
+	 * @param string $url The finalize URL of the order.
+	 * @param string $csr The certificate signing request in PEM format.
+	 *
+	 * @return array The order.
+	 * @throws Exception When the authority refuses the request.
+	 */
+	public function finalize(string $url, string $csr): array {
+		$der = base64_decode(preg_replace('/-----[^-]+-----|\s+/', '', $csr));
+		$response = $this->post($url, ['csr' => self::base64url($der)]);
+		if ($response['status'] != 200 || !is_array($response['json'])) {
+			throw new Exception($this->problem($response, 'the order could not be finalized'));
+		}
+		return $response['json'];
+	}
+
+	/**
+	 * Downloads the certificate of a valid order.
+	 *
+	 * @param string $url The certificate URL of the order.
+	 *
+	 * @return string The certificate followed by its chain, in PEM format.
+	 * @throws Exception When the certificate cannot be downloaded.
+	 */
+	public function download(string $url): string {
+		$response = $this->post($url, null, false, 'application/pem-certificate-chain');
+		if ($response['status'] != 200 || strpos($response['body'], '-----BEGIN CERTIFICATE-----') === false) {
+			throw new Exception($this->problem($response, 'the certificate could not be downloaded'));
+		}
+		return $response['body'];
+	}
+
+	/**
+	 * Creates the certificate signing request of an order.
+	 *
+	 * Every name goes in the subject alternative names. The first name that fits is also used as the common
+	 * name, which some older clients still read.
+	 *
+	 * @param string $private_key The private key of the certificate, in PEM format.
+	 * @param array  $domains     The names.
+	 *
+	 * @return string The request in PEM format.
+	 * @throws Exception When openssl cannot create it.
+	 */
+	public static function csr(string $private_key, array $domains): string {
+		$key = openssl_pkey_get_private($private_key);
+		if ($key === false) {
+			throw new Exception('the certificate key cannot be read');
+		}
+
+		//openssl only takes the subject alternative names from a config file
+		$names = [];
+		foreach (array_values($domains) as $i => $domain) {
+			$names[] = 'DNS.' . ($i + 1) . ' = ' . $domain;
+		}
+		$config = "[ req ]\ndistinguished_name = req_dn\nreq_extensions = req_ext\n[ req_dn ]\n[ req_ext ]\nsubjectAltName = @san\n[ san ]\n" . implode("\n", $names) . "\n";
+		$config_file = tempnam(sys_get_temp_dir(), 'cert_manager_csr_');
+		file_put_contents($config_file, $config);
+
+		$subject = [];
+		foreach ($domains as $domain) {
+			if (strlen($domain) <= 64) {
+				$subject['commonName'] = $domain;
+				break;
+			}
+		}
+		$csr = openssl_csr_new($subject, $key, ['config' => $config_file, 'digest_alg' => 'sha256', 'req_extensions' => 'req_ext']);
+		unlink($config_file);
+		if ($csr === false || !openssl_csr_export($csr, $pem)) {
+			throw new Exception('the certificate signing request could not be created: ' . openssl_error_string());
+		}
+		return $pem;
+	}
+
+	/**
+	 * The key authorization of a challenge: its token and the account thumbprint.
+	 *
+	 * @param string $token The token of the challenge.
+	 *
+	 * @return string
+	 */
+	public function key_authorization(string $token): string {
+		return $token . '.' . $this->thumbprint();
+	}
+
+	/**
 	 * The thumbprint of the account key (RFC 7638), which is part of every key authorization.
 	 *
 	 * @return string The base64url encoded SHA-256 thumbprint.

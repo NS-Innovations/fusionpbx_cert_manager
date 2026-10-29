@@ -281,7 +281,7 @@
 			$certificate_renew_days = $row["certificate_renew_days"];
 			$certificate_enabled = $row["certificate_enabled"];
 			$certificate_description = $row["certificate_description"];
-			$certificate_pem = $row["certificate_source"] == 'import' ? $row["certificate_pem"].$row["certificate_chain"] : '';
+			$certificate_pem = $row["certificate_source"] == 'import' ? trim($row["certificate_pem"]."\n".$row["certificate_chain"])."\n" : '';
 		}
 		unset($sql, $parameters, $row);
 	}
