@@ -92,6 +92,12 @@ class certificate_order {
 	private $client;
 
 	/**
+	 * the DNS provider of the certificate, built the first time it is needed
+	 * @var dns_provider|null
+	 */
+	private $provider;
+
+	/**
 	 * Initializes the object with the provided settings.
 	 *
 	 * @param array $setting_array 'database', 'settings' and 'crypto'.
@@ -125,6 +131,7 @@ class certificate_order {
 			return '';
 		}
 		$this->state = json_decode((string) $this->certificate['certificate_order'], true) ?: [];
+		$this->provider = null;
 
 		try {
 			//the account has to be usable
@@ -221,7 +228,16 @@ class certificate_order {
 			$this->state['authorizations'][] = $entry;
 			$this->save_state('ordering');
 		}
+		$this->state['published'] = time();
+		$this->save_state($this->status());
 		$this->log('info', 'challenges published');
+		if ($this->status() == 'waiting_dns') {
+			foreach ($this->state['authorizations'] as $entry) {
+				if (!empty($entry['fqdn'])) {
+					$this->log('info', 'waiting for the TXT record ' . $entry['fqdn'] . ' with the value ' . $entry['value']);
+				}
+			}
+		}
 	}
 
 	/**
@@ -248,6 +264,13 @@ class certificate_order {
 			@chmod($entry['file'], 0644);
 			return;
 		}
+		if ($entry['type'] == 'dns-01') {
+			$entry['fqdn'] = '_acme-challenge.' . preg_replace('/^\*\./', '', $entry['domain']);
+			$entry['value'] = $this->client->dns_value($entry['token']);
+			$entry['manual'] = $this->provider()::manual();
+			$entry['record'] = $this->provider()->create_txt($entry['fqdn'], $entry['value']);
+			return;
+		}
 		throw new Exception('the challenge type ' . $entry['type'] . ' is not supported');
 	}
 
@@ -260,6 +283,11 @@ class certificate_order {
 	private function answer(): void {
 		foreach ($this->state['authorizations'] as $entry) {
 			if ($entry['status'] != 'valid' && !$this->visible($entry)) {
+				//a record added through an API that does not show up in time is not going to
+				$timeout = (int) $this->settings->get('cert_manager', 'propagation_timeout', 600);
+				if (empty($entry['manual']) && time() - ($this->state['published'] ?? time()) > $timeout) {
+					throw new Exception('the TXT record ' . $entry['fqdn'] . ' could not be seen after ' . $timeout . ' seconds');
+				}
 				return;
 			}
 		}
@@ -282,6 +310,30 @@ class certificate_order {
 	 * @return bool
 	 */
 	private function visible(array $entry): bool {
+		if (($entry['type'] ?? '') != 'dns-01') {
+			return true;
+		}
+
+		//every resolver has to see the value, since the authority may ask any of them
+		$resolvers = $this->settings->get('cert_manager', 'dns_resolver', ['https://cloudflare-dns.com/dns-query']);
+		foreach ((array) $resolvers as $resolver) {
+			$ch = curl_init($resolver . '?' . http_build_query(['name' => $entry['fqdn'], 'type' => 'TXT']));
+			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+			curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+			curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+			curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/dns-json']);
+			$response = json_decode((string) curl_exec($ch), true);
+			$found = false;
+			foreach ($response['Answer'] ?? [] as $answer) {
+				if (($answer['type'] ?? 0) == 16 && trim(str_replace('" "', '', $answer['data'] ?? ''), '"') === $entry['value']) {
+					$found = true;
+				}
+			}
+			if (!$found) {
+				return false;
+			}
+		}
 		return true;
 	}
 
@@ -421,6 +473,9 @@ class certificate_order {
 			if (!empty($entry['file']) && file_exists($entry['file'])) {
 				unlink($entry['file']);
 			}
+			if (!empty($entry['fqdn']) && empty($entry['manual'])) {
+				$this->provider()->delete_txt($entry['fqdn'], (string) ($entry['record'] ?? ''));
+			}
 		}
 	}
 
@@ -430,7 +485,31 @@ class certificate_order {
 	 * @return string
 	 */
 	private function status(): string {
+		if (($this->state['stage'] ?? '') == 'published') {
+			foreach ($this->state['authorizations'] ?? [] as $entry) {
+				if (!empty($entry['manual']) && $entry['status'] != 'valid') {
+					return 'waiting_dns';
+				}
+			}
+		}
 		return 'ordering';
+	}
+
+	/**
+	 * The DNS provider of the certificate.
+	 *
+	 * @return dns_provider
+	 * @throws Exception When the certificate has no usable provider.
+	 */
+	private function provider(): dns_provider {
+		if ($this->provider === null) {
+			if (empty($this->certificate['dns_provider_uuid'])) {
+				throw new Exception('the certificate has no DNS provider');
+			}
+			$providers = new dns_providers(['database' => $this->database]);
+			$this->provider = $providers->load($this->certificate['dns_provider_uuid'], $this->crypto);
+		}
+		return $this->provider;
 	}
 
 	/**

@@ -263,7 +263,7 @@
 		$sql .= "floor(extract(epoch from (certificate_not_after - now())) / 86400) as days_left, ";
 		$sql .= "certificate_status, certificate_message, cast(certificate_renew as text) as certificate_renew, ";
 		$sql .= "to_char(certificate_next_attempt, 'YYYY-MM-DD HH24:MI') as certificate_next_attempt, ";
-		$sql .= "certificate_pem, certificate_chain, ";
+		$sql .= "certificate_pem, certificate_chain, certificate_order, ";
 		$sql .= "cast(certificate_enabled as text) as certificate_enabled, certificate_description ";
 		$sql .= "from v_certificates ";
 		$sql .= "where certificate_uuid = :certificate_uuid ";
@@ -347,6 +347,29 @@
 		}
 		echo "</td>\n";
 		echo "</tr>\n";
+
+		//show the records a manual dns provider is waiting for
+		$records = [];
+		$order_state = json_decode((string) $certificate['certificate_order'], true) ?: [];
+		foreach ($order_state['authorizations'] ?? [] as $entry) {
+			if (!empty($entry['manual']) && ($entry['status'] ?? '') != 'valid') {
+				$records[] = $entry;
+			}
+		}
+		if (!empty($records)) {
+			echo "<tr>\n";
+			echo "<td class='vncell' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_dns_records']."</td>\n";
+			echo "<td class='vtable' align='left'>\n";
+			echo "	".$text['description-certificate_dns_records']."<br /><br />\n";
+			echo "	<table class='list' style='width: auto;'>\n";
+			echo "		<tr class='list-header'><th>".$text['label-type']."</th><th>".$text['label-name']."</th><th>".$text['label-value']."</th></tr>\n";
+			foreach ($records as $entry) {
+				echo "		<tr class='list-row'><td>TXT</td><td style='font-family: monospace;'>".escape($entry['fqdn'])."</td><td style='font-family: monospace;'>".escape($entry['value'])."</td></tr>\n";
+			}
+			echo "	</table>\n";
+			echo "</td>\n";
+			echo "</tr>\n";
+		}
 		if (!empty($certificate['certificate_serial'])) {
 			echo "<tr>\n";
 			echo "<td class='vncell' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_issuer']."</td>\n";

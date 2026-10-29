@@ -330,4 +330,10 @@ $text['message-certificate_key_invalid']['en-gb'] = "No private key in PEM forma
 $text['message-certificate_key_mismatch']['en-us'] = "The private key does not belong to the certificate.";
 $text['message-certificate_key_mismatch']['en-gb'] = "The private key does not belong to the certificate.";
 
+$text['label-certificate_dns_records']['en-us'] = "DNS Records";
+$text['label-certificate_dns_records']['en-gb'] = "DNS Records";
+
+$text['description-certificate_dns_records']['en-us'] = "Add these TXT records at your DNS host. The order carries on once every DNS resolver sees them; a name with two values needs both records.";
+$text['description-certificate_dns_records']['en-gb'] = "Add these TXT records at your DNS host. The order carries on once every DNS resolver sees them; a name with two values needs both records.";
+
 ?>

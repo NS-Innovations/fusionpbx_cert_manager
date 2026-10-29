@@ -351,6 +351,17 @@ class acme_client {
 	}
 
 	/**
+	 * The value of the TXT record of a dns-01 challenge: the SHA-256 digest of its key authorization.
+	 *
+	 * @param string $token The token of the challenge.
+	 *
+	 * @return string
+	 */
+	public function dns_value(string $token): string {
+		return self::base64url(hash('sha256', $this->key_authorization($token), true));
+	}
+
+	/**
 	 * The thumbprint of the account key (RFC 7638), which is part of every key authorization.
 	 *
 	 * @return string The base64url encoded SHA-256 thumbprint.
