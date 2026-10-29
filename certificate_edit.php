@@ -50,6 +50,8 @@
 	$certificate_renew_days = '';
 	$certificate_enabled = 'true';
 	$certificate_description = '';
+	$certificate_pem = '';
+	$certificate_private_key = '';
 	$certificate = [];
 
 //set variables from the http get parameters
@@ -84,6 +86,9 @@
 //get posted data
 	if (count($_POST) > 0) {
 		$certificate_name = $_POST['certificate_name'] ?? '';
+		$certificate_source = ($_POST['certificate_source'] ?? '') == 'import' ? 'import' : 'acme';
+		$certificate_pem = $_POST['certificate_pem'] ?? '';
+		$certificate_private_key = permission_exists('certificate_private_key') ? ($_POST['certificate_private_key'] ?? '') : '';
 		$certificate_domains = implode("\n", certificates::split_domains($_POST['certificate_domains'] ?? ''));
 		$acme_account_uuid = $_POST['acme_account_uuid'] ?? '';
 		$certificate_challenge = $_POST['certificate_challenge'] ?? '';
@@ -109,27 +114,64 @@
 		//get the saved certificate, to know whether it has to be ordered again
 			$saved = [];
 			if ($action == 'update') {
-				$sql = "select certificate_domains, certificate_key_type from v_certificates ";
+				$sql = "select certificate_source, certificate_domains, certificate_key_type, certificate_private_key from v_certificates ";
 				$sql .= "where certificate_uuid = :certificate_uuid ";
 				$parameters['certificate_uuid'] = $certificate_uuid;
 				$saved = $database->select($sql, $parameters, 'row') ?: [];
 				unset($sql, $parameters);
 			}
 
+		//the source of a saved certificate does not change
+			if (!empty($saved['certificate_source'])) {
+				$certificate_source = $saved['certificate_source'];
+			}
+
 		//check for all required data
 			$msg = '';
-			$domains = certificates::split_domains($certificate_domains);
 			if (empty($certificate_name)) { $msg .= $text['message-required']." ".$text['label-name']."<br>\n"; }
-			if (empty($domains)) { $msg .= $text['message-required']." ".$text['label-certificate_domains']."<br>\n"; }
-			foreach (certificates::invalid_domains($domains) as $domain) {
-				$msg .= $text['message-certificate_domain_invalid']." ".escape($domain)."<br>\n";
+			if ($certificate_source == 'acme') {
+				$domains = certificates::split_domains($certificate_domains);
+				if (empty($domains)) { $msg .= $text['message-required']." ".$text['label-certificate_domains']."<br>\n"; }
+				foreach (certificates::invalid_domains($domains) as $domain) {
+					$msg .= $text['message-certificate_domain_invalid']." ".escape($domain)."<br>\n";
+				}
+				if (!is_uuid($acme_account_uuid)) { $msg .= $text['message-required']." ".$text['label-acme_account']."<br>\n"; }
+				if (!in_array($certificate_challenge, ['http-01', 'dns-01'], true)) { $msg .= $text['message-required']." ".$text['label-certificate_challenge']."<br>\n"; }
+				if ($certificate_challenge == 'http-01' && preg_grep('/^\*\./', $domains)) { $msg .= $text['message-certificate_wildcard_dns']."<br>\n"; }
+				if ($certificate_challenge == 'dns-01' && !is_uuid($dns_provider_uuid)) { $msg .= $text['message-required']." ".$text['label-dns_provider']."<br>\n"; }
+				if (!in_array($certificate_key_type, acme_client::key_types, true)) { $msg .= $text['message-required']." ".$text['label-certificate_key_type']."<br>\n"; }
+				if ($certificate_renew_days !== '' && (!ctype_digit($certificate_renew_days) || (int) $certificate_renew_days < 1)) { $msg .= $text['message-certificate_renew_days_invalid']."<br>\n"; }
 			}
-			if (!is_uuid($acme_account_uuid)) { $msg .= $text['message-required']." ".$text['label-acme_account']."<br>\n"; }
-			if (!in_array($certificate_challenge, ['http-01', 'dns-01'], true)) { $msg .= $text['message-required']." ".$text['label-certificate_challenge']."<br>\n"; }
-			if ($certificate_challenge == 'http-01' && preg_grep('/^\*\./', $domains)) { $msg .= $text['message-certificate_wildcard_dns']."<br>\n"; }
-			if ($certificate_challenge == 'dns-01' && !is_uuid($dns_provider_uuid)) { $msg .= $text['message-required']." ".$text['label-dns_provider']."<br>\n"; }
-			if (!in_array($certificate_key_type, acme_client::key_types, true)) { $msg .= $text['message-required']." ".$text['label-certificate_key_type']."<br>\n"; }
-			if ($certificate_renew_days !== '' && (!ctype_digit($certificate_renew_days) || (int) $certificate_renew_days < 1)) { $msg .= $text['message-certificate_renew_days_invalid']."<br>\n"; }
+
+		//read the imported certificate, its chain and its key
+			if ($certificate_source == 'import') {
+				$crypto = new cert_manager_crypto(['settings' => $settings]);
+				if (!$crypto->available()) {
+					message::add($text['message-key_file_missing'], 'negative');
+					header('Location: certificates.php');
+					exit;
+				}
+				$imported = cert_manager_pem::certificates($certificate_pem);
+				$imported_key = cert_manager_pem::private_key($certificate_private_key);
+				if (trim($certificate_private_key) !== '' && $imported_key === '') {
+					$msg .= $text['message-certificate_key_invalid']."<br>\n";
+				}
+				if ($imported_key === '' && !empty($saved['certificate_private_key'])) {
+					$imported_key = $crypto->decrypt($saved['certificate_private_key']);
+				}
+				if (empty($imported)) {
+					$msg .= $text['message-certificate_pem_invalid']."<br>\n";
+				}
+				elseif ($imported_key === '') {
+					$msg .= $text['message-required']." ".$text['label-certificate_private_key']."<br>\n";
+				}
+				elseif (!cert_manager_pem::key_matches($imported_key, $imported[0])) {
+					$msg .= $text['message-certificate_key_mismatch']."<br>\n";
+				}
+				else {
+					$details = cert_manager_pem::details($imported[0]);
+				}
+			}
 			if (!empty($msg) && empty($_POST["persistformvar"])) {
 				require_once "resources/header.php";
 				require_once "resources/persist_form_var.php";
@@ -149,26 +191,47 @@
 			}
 			$array['certificates'][0]['certificate_uuid'] = $certificate_uuid;
 			$array['certificates'][0]['certificate_name'] = $certificate_name;
-			$array['certificates'][0]['certificate_source'] = 'acme';
-			$array['certificates'][0]['certificate_domains'] = $certificate_domains;
-			$array['certificates'][0]['acme_account_uuid'] = $acme_account_uuid;
-			$array['certificates'][0]['certificate_challenge'] = $certificate_challenge;
-			$array['certificates'][0]['dns_provider_uuid'] = $certificate_challenge == 'dns-01' ? $dns_provider_uuid : null;
-			$array['certificates'][0]['certificate_key_type'] = $certificate_key_type;
-			$array['certificates'][0]['certificate_renew_days'] = $certificate_renew_days !== '' ? (int) $certificate_renew_days : null;
+			$array['certificates'][0]['certificate_source'] = $certificate_source;
 			$array['certificates'][0]['certificate_enabled'] = $certificate_enabled;
 			$array['certificates'][0]['certificate_description'] = $certificate_description;
+			$order_requested = false;
+			if ($certificate_source == 'acme') {
+				$array['certificates'][0]['certificate_domains'] = $certificate_domains;
+				$array['certificates'][0]['acme_account_uuid'] = $acme_account_uuid;
+				$array['certificates'][0]['certificate_challenge'] = $certificate_challenge;
+				$array['certificates'][0]['dns_provider_uuid'] = $certificate_challenge == 'dns-01' ? $dns_provider_uuid : null;
+				$array['certificates'][0]['certificate_key_type'] = $certificate_key_type;
+				$array['certificates'][0]['certificate_renew_days'] = $certificate_renew_days !== '' ? (int) $certificate_renew_days : null;
 
-		//order a new certificate, or a renewal when the names or the key type change or one was asked for
-			$names_changed = !empty($saved) && certificates::split_domains($saved['certificate_domains']) != $domains;
-			$key_changed = !empty($saved) && $saved['certificate_key_type'] != $certificate_key_type;
-			if ($action == 'add') {
-				$array['certificates'][0]['certificate_status'] = 'pending';
+				//order a new certificate, or a renewal when the names or the key type change or one was asked for
+				$names_changed = !empty($saved) && certificates::split_domains($saved['certificate_domains']) != $domains;
+				$key_changed = !empty($saved) && $saved['certificate_key_type'] != $certificate_key_type;
+				if ($action == 'add') {
+					$array['certificates'][0]['certificate_status'] = 'pending';
+				}
+				if ($action == 'add' || $names_changed || $key_changed || ($certificate_renew_now && permission_exists('certificate_renew'))) {
+					$array['certificates'][0]['certificate_renew'] = 'true';
+					$array['certificates'][0]['certificate_attempts'] = 0;
+					$array['certificates'][0]['certificate_next_attempt'] = null;
+					$order_requested = true;
+				}
 			}
-			if ($action == 'add' || $names_changed || $key_changed || ($certificate_renew_now && permission_exists('certificate_renew'))) {
-				$array['certificates'][0]['certificate_renew'] = 'true';
-				$array['certificates'][0]['certificate_attempts'] = 0;
-				$array['certificates'][0]['certificate_next_attempt'] = null;
+			else {
+				//an imported certificate takes its names, dates and key type from what was imported
+				$array['certificates'][0]['certificate_domains'] = implode("\n", $details['domains']);
+				$array['certificates'][0]['certificate_key_type'] = cert_manager_pem::key_type($imported_key);
+				$array['certificates'][0]['certificate_pem'] = $imported[0];
+				$array['certificates'][0]['certificate_chain'] = implode('', array_slice($imported, 1));
+				$array['certificates'][0]['certificate_serial'] = $details['serial'];
+				$array['certificates'][0]['certificate_issuer'] = $details['issuer'];
+				$array['certificates'][0]['certificate_not_before'] = $details['not_before'];
+				$array['certificates'][0]['certificate_not_after'] = $details['not_after'];
+				$array['certificates'][0]['certificate_status'] = 'valid';
+				$array['certificates'][0]['certificate_message'] = null;
+				$array['certificates'][0]['certificate_renew'] = 'false';
+				if (permission_exists('certificate_private_key')) {
+					$array['certificates'][0]['certificate_private_key'] = $crypto->encrypt($imported_key);
+				}
 			}
 
 		//save the data
@@ -182,7 +245,7 @@
 			if ($action == "update") {
 				message::add($text['message-update']);
 			}
-			if ($action == 'add' || $names_changed || $key_changed || $certificate_renew_now) {
+			if ($order_requested) {
 				message::add($text['message-certificate_renew_requested']);
 			}
 
@@ -200,6 +263,7 @@
 		$sql .= "floor(extract(epoch from (certificate_not_after - now())) / 86400) as days_left, ";
 		$sql .= "certificate_status, certificate_message, cast(certificate_renew as text) as certificate_renew, ";
 		$sql .= "to_char(certificate_next_attempt, 'YYYY-MM-DD HH24:MI') as certificate_next_attempt, ";
+		$sql .= "certificate_pem, certificate_chain, ";
 		$sql .= "cast(certificate_enabled as text) as certificate_enabled, certificate_description ";
 		$sql .= "from v_certificates ";
 		$sql .= "where certificate_uuid = :certificate_uuid ";
@@ -217,6 +281,7 @@
 			$certificate_renew_days = $row["certificate_renew_days"];
 			$certificate_enabled = $row["certificate_enabled"];
 			$certificate_description = $row["certificate_description"];
+			$certificate_pem = $row["certificate_source"] == 'import' ? $row["certificate_pem"].$row["certificate_chain"] : '';
 		}
 		unset($sql, $parameters, $row);
 	}
@@ -314,6 +379,45 @@
 	echo "</tr>\n";
 
 	echo "<tr>\n";
+	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_source']."</td>\n";
+	echo "<td class='vtable' align='left'>\n";
+	if ($action == 'add') {
+		echo "	<select class='formfld' name='certificate_source' id='certificate_source' onchange='show_source_fields();'>\n";
+		foreach (['acme', 'import'] as $source) {
+			echo "		<option value='".$source."' ".($source == $certificate_source ? "selected='selected'" : null).">".$text['option-certificate_source_'.$source]."</option>\n";
+		}
+		echo "	</select>\n";
+	}
+	else {
+		echo "	".$text['option-certificate_source_'.$certificate_source]."\n";
+		echo "	<input type='hidden' name='certificate_source' id='certificate_source' value='".escape($certificate_source)."'>\n";
+	}
+	echo "	<br />\n";
+	echo "	".$text['description-certificate_source']."\n";
+	echo "</td>\n";
+	echo "</tr>\n";
+
+	echo "<tr class='source_fields' data-source='import'>\n";
+	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_pem']."</td>\n";
+	echo "<td class='vtable' align='left'>\n";
+	echo "	<textarea class='formfld' name='certificate_pem' rows='10' style='width: 100%; font-family: monospace;' placeholder='-----BEGIN CERTIFICATE-----'>".escape_textarea($certificate_pem)."</textarea>\n";
+	echo "	<br />\n";
+	echo "	".$text['description-certificate_pem']."\n";
+	echo "</td>\n";
+	echo "</tr>\n";
+
+	if (permission_exists('certificate_private_key')) {
+		echo "<tr class='source_fields' data-source='import'>\n";
+		echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_private_key']."</td>\n";
+		echo "<td class='vtable' align='left'>\n";
+		echo "	<textarea class='formfld' name='certificate_private_key' rows='6' style='width: 100%; font-family: monospace;' autocomplete='off' placeholder=\"".($action == 'update' ? $text['label-unchanged'] : '-----BEGIN PRIVATE KEY-----')."\"></textarea>\n";
+		echo "	<br />\n";
+		echo "	".$text['description-certificate_private_key']."\n";
+		echo "</td>\n";
+		echo "</tr>\n";
+	}
+
+	echo "<tr class='source_fields' data-source='acme'>\n";
 	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_domains']."</td>\n";
 	echo "<td class='vtable' align='left'>\n";
 	echo "	<textarea class='formfld' name='certificate_domains' rows='4' style='width: 350px;'>".escape_textarea($certificate_domains)."</textarea>\n";
@@ -322,7 +426,7 @@
 	echo "</td>\n";
 	echo "</tr>\n";
 
-	echo "<tr>\n";
+	echo "<tr class='source_fields' data-source='acme'>\n";
 	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-acme_account']."</td>\n";
 	echo "<td class='vtable' align='left'>\n";
 	echo "	<select class='formfld' name='acme_account_uuid'>\n";
@@ -336,10 +440,10 @@
 	echo "</td>\n";
 	echo "</tr>\n";
 
-	echo "<tr>\n";
+	echo "<tr class='source_fields' data-source='acme'>\n";
 	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_challenge']."</td>\n";
 	echo "<td class='vtable' align='left'>\n";
-	echo "	<select class='formfld' name='certificate_challenge' id='certificate_challenge' onchange=\"document.getElementById('tr_dns_provider').style.display = this.value == 'dns-01' ? '' : 'none';\">\n";
+	echo "	<select class='formfld' name='certificate_challenge' id='certificate_challenge' onchange='show_source_fields();'>\n";
 	foreach (['http-01', 'dns-01'] as $challenge) {
 		echo "		<option value='".$challenge."' ".($challenge == $certificate_challenge ? "selected='selected'" : null).">".$text['option-certificate_challenge_'.str_replace('-', '_', $challenge)]."</option>\n";
 	}
@@ -349,7 +453,7 @@
 	echo "</td>\n";
 	echo "</tr>\n";
 
-	echo "<tr id='tr_dns_provider' style='".($certificate_challenge == 'dns-01' ? '' : 'display: none;')."'>\n";
+	echo "<tr id='tr_dns_provider' class='source_fields' data-source='acme'>\n";
 	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-dns_provider']."</td>\n";
 	echo "<td class='vtable' align='left'>\n";
 	echo "	<select class='formfld' name='dns_provider_uuid'>\n";
@@ -363,7 +467,7 @@
 	echo "</td>\n";
 	echo "</tr>\n";
 
-	echo "<tr>\n";
+	echo "<tr class='source_fields' data-source='acme'>\n";
 	echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_key_type']."</td>\n";
 	echo "<td class='vtable' align='left'>\n";
 	echo "	<select class='formfld' name='certificate_key_type'>\n";
@@ -376,7 +480,7 @@
 	echo "</td>\n";
 	echo "</tr>\n";
 
-	echo "<tr>\n";
+	echo "<tr class='source_fields' data-source='acme'>\n";
 	echo "<td class='vncell' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_renew_days']."</td>\n";
 	echo "<td class='vtable' align='left'>\n";
 	echo "	<input class='formfld' type='number' name='certificate_renew_days' min='1' max='365' value=\"".escape($certificate_renew_days)."\" placeholder=\"".escape($settings->get('cert_manager', 'renew_days', 30))."\">\n";
@@ -416,6 +520,20 @@
 	echo "<input type='hidden' name='".$token['name']."' value='".$token['hash']."'>\n";
 
 	echo "</form>\n";
+
+//show only the fields of the selected source
+	echo "<script>\n";
+	echo "	function show_source_fields() {\n";
+	echo "		var source = document.getElementById('certificate_source').value;\n";
+	echo "		document.querySelectorAll('tr.source_fields').forEach(function (row) {\n";
+	echo "			row.style.display = row.getAttribute('data-source') == source ? '' : 'none';\n";
+	echo "		});\n";
+	echo "		if (source == 'acme' && document.getElementById('certificate_challenge').value != 'dns-01') {\n";
+	echo "			document.getElementById('tr_dns_provider').style.display = 'none';\n";
+	echo "		}\n";
+	echo "	}\n";
+	echo "	show_source_fields();\n";
+	echo "</script>\n";
 
 //include the footer
 	require_once "resources/footer.php";

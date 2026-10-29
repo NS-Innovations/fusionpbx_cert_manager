@@ -306,4 +306,28 @@ $text['description-certificate_acme_account']['en-gb'] = "Select the ACME accoun
 $text['description-certificate_dns_provider']['en-us'] = "Select the DNS provider that publishes the TXT records.";
 $text['description-certificate_dns_provider']['en-gb'] = "Select the DNS provider that publishes the TXT records.";
 
+$text['label-certificate_pem']['en-us'] = "Certificate";
+$text['label-certificate_pem']['en-gb'] = "Certificate";
+
+$text['label-certificate_private_key']['en-us'] = "Private Key";
+$text['label-certificate_private_key']['en-gb'] = "Private Key";
+
+$text['description-certificate_source']['en-us'] = "Select ACME to have the certificate ordered and renewed automatically, or Import to paste a certificate issued elsewhere, such as a STIR/SHAKEN certificate from an STI-CA. An imported certificate is not renewed; you are warned before it expires.";
+$text['description-certificate_source']['en-gb'] = "Select ACME to have the certificate ordered and renewed automatically, or Import to paste a certificate issued elsewhere, such as a STIR/SHAKEN certificate from an STI-CA. An imported certificate is not renewed; you are warned before it expires.";
+
+$text['description-certificate_pem']['en-us'] = "Paste the certificate in PEM format, followed by its intermediate certificates. The names, dates and issuer are read from it.";
+$text['description-certificate_pem']['en-gb'] = "Paste the certificate in PEM format, followed by its intermediate certificates. The names, dates and issuer are read from it.";
+
+$text['description-certificate_private_key']['en-us'] = "Paste the private key of the certificate in PEM format. It is stored encrypted and never shown again. Leave it blank to keep the saved key.";
+$text['description-certificate_private_key']['en-gb'] = "Paste the private key of the certificate in PEM format. It is stored encrypted and never shown again. Leave it blank to keep the saved key.";
+
+$text['message-certificate_pem_invalid']['en-us'] = "No certificate in PEM format was found.";
+$text['message-certificate_pem_invalid']['en-gb'] = "No certificate in PEM format was found.";
+
+$text['message-certificate_key_invalid']['en-us'] = "No private key in PEM format was found. An encrypted key has to be decrypted first.";
+$text['message-certificate_key_invalid']['en-gb'] = "No private key in PEM format was found. An encrypted key has to be decrypted first.";
+
+$text['message-certificate_key_mismatch']['en-us'] = "The private key does not belong to the certificate.";
+$text['message-certificate_key_mismatch']['en-gb'] = "The private key does not belong to the certificate.";
+
 ?>
