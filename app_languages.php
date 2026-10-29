@@ -336,4 +336,31 @@ $text['label-certificate_dns_records']['en-gb'] = "DNS Records";
 $text['description-certificate_dns_records']['en-us'] = "Add these TXT records at your DNS host. The order carries on once every DNS resolver sees them; a name with two values needs both records.";
 $text['description-certificate_dns_records']['en-gb'] = "Add these TXT records at your DNS host. The order carries on once every DNS resolver sees them; a name with two values needs both records.";
 
+$text['label-certificate_deployments']['en-us'] = "Deployments";
+$text['label-certificate_deployments']['en-gb'] = "Deployments";
+
+$text['label-deployment_target']['en-us'] = "Target";
+$text['label-deployment_target']['en-gb'] = "Target";
+
+$text['label-deployment_options']['en-us'] = "Options";
+$text['label-deployment_options']['en-gb'] = "Options";
+
+$text['description-certificate_deployments']['en-us'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart.";
+$text['description-certificate_deployments']['en-gb'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart.";
+
+$text['option-deployment_target_freeswitch']['en-us'] = "FreeSWITCH TLS";
+$text['option-deployment_target_freeswitch']['en-gb'] = "FreeSWITCH TLS";
+
+$text['option-deployment_status_pending']['en-us'] = "Waiting to be deployed";
+$text['option-deployment_status_pending']['en-gb'] = "Waiting to be deployed";
+
+$text['option-deployment_status_deployed']['en-us'] = "Deployed";
+$text['option-deployment_status_deployed']['en-gb'] = "Deployed";
+
+$text['option-deployment_status_restart']['en-us'] = "Restart needed";
+$text['option-deployment_status_restart']['en-gb'] = "Restart needed";
+
+$text['option-deployment_status_failed']['en-us'] = "Failed";
+$text['option-deployment_status_failed']['en-gb'] = "Failed";
+
 ?>

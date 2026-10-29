@@ -166,6 +166,37 @@ class certificates {
 	}
 
 	/**
+	 * Deletes deployments of a certificate. The files already deployed are left where they are.
+	 *
+	 * @param string $certificate_uuid The certificate the deployments belong to.
+	 * @param array  $records          An array of records, where each is an associative array containing
+	 *                                 'uuid' and 'checked' keys.
+	 *
+	 * @return void No return value; this method modifies the database state.
+	 */
+	public function delete_deployments(string $certificate_uuid, $records) {
+		if (permission_exists('certificate_deployment_delete') && is_uuid($certificate_uuid)) {
+
+			//build the delete array
+			$array = [];
+			$x = 0;
+			foreach ($records ?: [] as $record) {
+				if (!empty($record['checked']) && $record['checked'] == 'true' && is_uuid($record['uuid'] ?? '')) {
+					$array['certificate_deployments'][$x]['certificate_deployment_uuid'] = $record['uuid'];
+					$array['certificate_deployments'][$x]['certificate_uuid'] = $certificate_uuid;
+					$x++;
+				}
+			}
+
+			//delete the checked rows
+			if (!empty($array) && is_array($array) && @sizeof($array) != 0) {
+				$this->database->delete($array);
+				unset($array);
+			}
+		}
+	}
+
+	/**
 	 * Deletes one or more certificates along with their deployments and their log.
 	 *
 	 * The files already deployed are left where they are, so deleting a certificate never takes a running

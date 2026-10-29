@@ -130,6 +130,7 @@ class cert_manager_service extends service {
 			if ($this->enabled) {
 				try {
 					$this->order_certificates();
+					$this->deploy_certificates();
 					$this->trim_log();
 				}
 				catch (Throwable $e) {
@@ -184,6 +185,27 @@ class cert_manager_service extends service {
 			}
 			elseif ($status == 'failed') {
 				$this->warning('the order of the certificate ' . $certificate['certificate_name'] . ' failed');
+			}
+		}
+	}
+
+	/**
+	 * Deploys the certificates that changed since they were last deployed.
+	 *
+	 * @return void
+	 */
+	private function deploy_certificates(): void {
+		$crypto = new cert_manager_crypto(['settings' => $this->settings]);
+		if (!$crypto->available()) {
+			return;
+		}
+		$deployer = new certificate_deployer(['database' => $this->database, 'settings' => $this->settings, 'crypto' => $crypto]);
+		foreach ($deployer->deploy_pending() as $result) {
+			if ($result['status'] == 'failed') {
+				$this->warning('deploying ' . $result['name'] . ' to ' . $result['target'] . ' failed: ' . $result['message']);
+			}
+			else {
+				$this->info('deployed ' . $result['name'] . ' to ' . $result['target']);
 			}
 		}
 	}

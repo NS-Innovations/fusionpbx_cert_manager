@@ -52,6 +52,7 @@
 	$certificate_description = '';
 	$certificate_pem = '';
 	$certificate_private_key = '';
+	$certificate_deployments = [];
 	$certificate = [];
 
 //set variables from the http get parameters
@@ -98,6 +99,8 @@
 		$certificate_enabled = $_POST['certificate_enabled'] ?? 'false';
 		$certificate_description = $_POST['certificate_description'] ?? '';
 		$certificate_renew_now = ($_POST['certificate_renew_now'] ?? '') == 'true';
+		$certificate_deployments = $_POST['certificate_deployments'] ?? [];
+		$certificate_deployments_delete = $_POST['certificate_deployments_delete'] ?? [];
 	}
 
 //process the http post data
@@ -234,9 +237,69 @@
 				}
 			}
 
+		//add the deployments to the array
+			if (permission_exists('certificate_deployment_add') || permission_exists('certificate_deployment_edit')) {
+
+				//get the saved deployments, to know which changed
+				$saved_deployments = [];
+				if ($action == 'update') {
+					$sql = "select certificate_deployment_uuid, deployment_target, deployment_options, cast(deployment_enabled as text) as deployment_enabled ";
+					$sql .= "from v_certificate_deployments ";
+					$sql .= "where certificate_uuid = :certificate_uuid ";
+					$parameters['certificate_uuid'] = $certificate_uuid;
+					foreach ($database->select($sql, $parameters, 'all') ?: [] as $row) {
+						$saved_deployments[$row['certificate_deployment_uuid']] = $row;
+					}
+					unset($sql, $parameters, $row);
+				}
+
+				$y = 0;
+				foreach ($certificate_deployments as $row) {
+					$deployment_uuid = $row['certificate_deployment_uuid'] ?? '';
+					$target = $row['deployment_target'] ?? '';
+					if (!in_array($target, certificate_deployer::targets, true)) {
+						continue;
+					}
+					if (is_uuid($deployment_uuid) && isset($saved_deployments[$deployment_uuid])) {
+						if (!permission_exists('certificate_deployment_edit')) {
+							continue;
+						}
+						$saved_deployment = $saved_deployments[$deployment_uuid];
+					}
+					else {
+						if (!permission_exists('certificate_deployment_add')) {
+							continue;
+						}
+						$deployment_uuid = uuid();
+						$saved_deployment = [];
+					}
+					$options = trim($row['deployment_options'] ?? '');
+					$enabled = ($row['deployment_enabled'] ?? '') == 'false' ? 'false' : 'true';
+					$array['certificates'][0]['certificate_deployments'][$y]['certificate_deployment_uuid'] = $deployment_uuid;
+					$array['certificates'][0]['certificate_deployments'][$y]['certificate_uuid'] = $certificate_uuid;
+					$array['certificates'][0]['certificate_deployments'][$y]['deployment_target'] = $target;
+					$array['certificates'][0]['certificate_deployments'][$y]['deployment_options'] = $options;
+					$array['certificates'][0]['certificate_deployments'][$y]['deployment_enabled'] = $enabled;
+
+					//deploy again when the target changed or the deployment was enabled again
+					if (empty($saved_deployment) || $saved_deployment['deployment_target'] != $target || (string) $saved_deployment['deployment_options'] != $options || ($saved_deployment['deployment_enabled'] != 'true' && $enabled == 'true')) {
+						$array['certificates'][0]['certificate_deployments'][$y]['deployment_serial'] = null;
+						$array['certificates'][0]['certificate_deployments'][$y]['deployment_status'] = 'pending';
+						$array['certificates'][0]['certificate_deployments'][$y]['deployment_message'] = null;
+					}
+					$y++;
+				}
+			}
+
 		//save the data
 			$database->save($array);
 			unset($array);
+
+		//remove the checked deployments
+			if ($action == 'update' && permission_exists('certificate_deployment_delete') && !empty($certificate_deployments_delete)) {
+				$obj = new certificates;
+				$obj->delete_deployments($certificate_uuid, $certificate_deployments_delete);
+			}
 
 		//set the message
 			if ($action == "add") {
@@ -284,6 +347,29 @@
 			$certificate_pem = $row["certificate_source"] == 'import' ? trim($row["certificate_pem"]."\n".$row["certificate_chain"])."\n" : '';
 		}
 		unset($sql, $parameters, $row);
+
+		$sql = "select certificate_deployment_uuid, deployment_target, deployment_options, deployment_status, deployment_message, ";
+		$sql .= "to_char(deployment_date, 'YYYY-MM-DD HH24:MI') as deployment_date, cast(deployment_enabled as text) as deployment_enabled ";
+		$sql .= "from v_certificate_deployments ";
+		$sql .= "where certificate_uuid = :certificate_uuid ";
+		$sql .= "order by deployment_target asc ";
+		$parameters['certificate_uuid'] = $certificate_uuid;
+		$certificate_deployments = $database->select($sql, $parameters, 'all') ?: [];
+		unset($sql, $parameters);
+	}
+
+//add a blank deployment row to the end of the list
+	if (!is_array($certificate_deployments)) {
+		$certificate_deployments = [];
+	}
+	if (permission_exists('certificate_deployment_add')) {
+		$certificate_deployments[] = ['deployment_target' => '', 'deployment_options' => '', 'deployment_enabled' => 'true'];
+	}
+	$show_deployment_delete = false;
+	foreach ($certificate_deployments as $row) {
+		if (!empty($row['certificate_deployment_uuid'])) {
+			$show_deployment_delete = true;
+		}
 	}
 
 //get the accounts and the providers to choose from
@@ -511,6 +597,82 @@
 	echo "	".$text['description-certificate_renew_days']."\n";
 	echo "</td>\n";
 	echo "</tr>\n";
+
+	if (permission_exists('certificate_deployment_view')) {
+		echo "<tr>\n";
+		echo "<td class='vncell' valign='top' align='left' nowrap='nowrap'>".$text['label-certificate_deployments']."</td>\n";
+		echo "<td class='vtable' align='left'>\n";
+		echo "	<table border='0' cellpadding='0' cellspacing='0'>\n";
+		echo "		<tr>\n";
+		echo "			<td class='vtable'>".$text['label-deployment_target']."</td>\n";
+		echo "			<td class='vtable'>".$text['label-deployment_options']."</td>\n";
+		echo "			<td class='vtable'>".$text['label-enabled']."</td>\n";
+		echo "			<td class='vtable'>".$text['label-status']."</td>\n";
+		if ($show_deployment_delete && permission_exists('certificate_deployment_delete')) {
+			echo "			<td class='vtable edit_delete_checkbox_all' onmouseover=\"swap_display('delete_label_deployments', 'delete_toggle_deployments');\" onmouseout=\"swap_display('delete_label_deployments', 'delete_toggle_deployments');\">\n";
+			echo "				<span id='delete_label_deployments'>".$text['label-delete']."</span>\n";
+			echo "				<span id='delete_toggle_deployments'><input type='checkbox' id='checkbox_all_deployments' name='checkbox_all' onclick=\"edit_all_toggle('deployments');\"></span>\n";
+			echo "			</td>\n";
+		}
+		echo "		</tr>\n";
+		$x = 0;
+		foreach ($certificate_deployments as $row) {
+			$saved_row = !empty($row['certificate_deployment_uuid']) && is_uuid($row['certificate_deployment_uuid']);
+			$editable = $saved_row ? permission_exists('certificate_deployment_edit') : permission_exists('certificate_deployment_add');
+			if ($saved_row) {
+				echo "		<input name='certificate_deployments[".$x."][certificate_deployment_uuid]' type='hidden' value=\"".escape($row['certificate_deployment_uuid'])."\">\n";
+			}
+			echo "		<tr>\n";
+			echo "			<td class='formfld'>\n";
+			echo "				<select class='formfld' name='certificate_deployments[".$x."][deployment_target]' ".(!$editable ? "disabled='disabled'" : null).">\n";
+			echo "					<option value=''></option>\n";
+			foreach (certificate_deployer::targets as $target) {
+				echo "					<option value='".$target."' ".($target == ($row['deployment_target'] ?? '') ? "selected='selected'" : null).">".$text['option-deployment_target_'.$target]."</option>\n";
+			}
+			echo "				</select>\n";
+			echo "			</td>\n";
+			echo "			<td class='formfld'>\n";
+			echo "				<input class='formfld' type='text' name='certificate_deployments[".$x."][deployment_options]' maxlength='255' value=\"".escape($row['deployment_options'] ?? '')."\" ".(!$editable ? "disabled='disabled'" : null).">\n";
+			echo "			</td>\n";
+			echo "			<td class='formfld'>\n";
+			echo "				<select class='formfld' name='certificate_deployments[".$x."][deployment_enabled]' ".(!$editable ? "disabled='disabled'" : null).">\n";
+			echo "					<option value='true' ".(($row['deployment_enabled'] ?? 'true') != 'false' ? "selected='selected'" : null).">".$text['option-true']."</option>\n";
+			echo "					<option value='false' ".(($row['deployment_enabled'] ?? '') == 'false' ? "selected='selected'" : null).">".$text['option-false']."</option>\n";
+			echo "				</select>\n";
+			echo "			</td>\n";
+			echo "			<td class='formfld'>\n";
+			if ($saved_row) {
+				$deployment_status = $row['deployment_status'] ?: 'pending';
+				echo "				".escape($text['option-deployment_status_'.$deployment_status] ?? $deployment_status);
+				if (!empty($row['deployment_date'])) {
+					echo " ".escape($row['deployment_date']);
+				}
+				if (!empty($row['deployment_message'])) {
+					echo "<br /><span style='font-size: 85%;'>".escape($row['deployment_message'])."</span>";
+				}
+				echo "\n";
+			}
+			echo "			</td>\n";
+			if ($show_deployment_delete && permission_exists('certificate_deployment_delete')) {
+				if ($saved_row) {
+					echo "			<td class='vtable' style='text-align: center; padding-bottom: 3px;'>\n";
+					echo "				<input type='checkbox' name='certificate_deployments_delete[".$x."][checked]' value='true' class='chk_delete checkbox_deployments' onclick=\"edit_delete_action('deployments');\">\n";
+					echo "				<input type='hidden' name='certificate_deployments_delete[".$x."][uuid]' value='".escape($row['certificate_deployment_uuid'])."' />\n";
+				}
+				else {
+					echo "			<td>\n";
+				}
+				echo "			</td>\n";
+			}
+			echo "		</tr>\n";
+			$x++;
+		}
+		echo "	</table>\n";
+		echo "	<br />\n";
+		echo "	".$text['description-certificate_deployments']."\n";
+		echo "</td>\n";
+		echo "</tr>\n";
+	}
 
 	echo "<tr>\n";
 	echo "<td class='vncell' valign='top' align='left' nowrap='nowrap'>".$text['label-enabled']."</td>\n";
