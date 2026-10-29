@@ -138,7 +138,7 @@
 		//get the saved certificate, to know whether it has to be ordered again
 			$saved = [];
 			if ($action == 'update') {
-				$sql = "select certificate_source, certificate_domains, certificate_key_type, certificate_private_key from v_certificates ";
+				$sql = "select certificate_source, certificate_domains, certificate_key_type, certificate_private_key, certificate_serial, certificate_warned from v_certificates ";
 				$sql .= "where certificate_uuid = :certificate_uuid ";
 				$parameters['certificate_uuid'] = $certificate_uuid;
 				$saved = $database->select($sql, $parameters, 'row') ?: [];
@@ -256,6 +256,7 @@
 				$array['certificates'][0]['certificate_status'] = 'valid';
 				$array['certificates'][0]['certificate_message'] = null;
 				$array['certificates'][0]['certificate_renew'] = 'false';
+				$array['certificates'][0]['certificate_warned'] = $details['serial'] != ($saved['certificate_serial'] ?? '') ? null : ($saved['certificate_warned'] ?? null);
 				if (permission_exists('certificate_private_key')) {
 					$array['certificates'][0]['certificate_private_key'] = $crypto->encrypt($imported_key);
 				}

@@ -387,4 +387,22 @@ $text['modal_message-restart']['en-gb'] = "Restarting a SIP profile drops the ca
 $text['message-deployment_restart_failed']['en-us'] = "The SIP profiles could not be restarted:";
 $text['message-deployment_restart_failed']['en-gb'] = "The SIP profiles could not be restarted:";
 
+$text['email_subject-certificate_expiring_acme']['en-us'] = "Certificate \${name} expires in \${days} days";
+$text['email_subject-certificate_expiring_acme']['en-gb'] = "Certificate \${name} expires in \${days} days";
+
+$text['email_body-certificate_expiring_acme']['en-us'] = "The certificate \${name} for \${domains} expires on \${expires}, in \${days} days, and has not been renewed. Open Advanced > Certificates on the server to see why its renewal is failing.";
+$text['email_body-certificate_expiring_acme']['en-gb'] = "The certificate \${name} for \${domains} expires on \${expires}, in \${days} days, and has not been renewed. Open Advanced > Certificates on the server to see why its renewal is failing.";
+
+$text['email_subject-certificate_expiring_import']['en-us'] = "Certificate \${name} expires in \${days} days";
+$text['email_subject-certificate_expiring_import']['en-gb'] = "Certificate \${name} expires in \${days} days";
+
+$text['email_body-certificate_expiring_import']['en-us'] = "The imported certificate \${name} for \${domains} expires on \${expires}, in \${days} days. It cannot renew itself: get a new certificate from its issuer and import it under Advanced > Certificates on the server.";
+$text['email_body-certificate_expiring_import']['en-gb'] = "The imported certificate \${name} for \${domains} expires on \${expires}, in \${days} days. It cannot renew itself: get a new certificate from its issuer and import it under Advanced > Certificates on the server.";
+
+$text['email_subject-certificate_failed']['en-us'] = "Certificate \${name} could not be renewed";
+$text['email_subject-certificate_failed']['en-gb'] = "Certificate \${name} could not be renewed";
+
+$text['email_body-certificate_failed']['en-us'] = "Ordering the certificate \${name} for \${domains} failed: \${message} It will be tried again at \${next_attempt}. The current certificate is valid until \${expires}.";
+$text['email_body-certificate_failed']['en-gb'] = "Ordering the certificate \${name} for \${domains} failed: \${message} It will be tried again at \${next_attempt}. The current certificate is valid until \${expires}.";
+
 ?>

@@ -80,6 +80,12 @@ class cert_manager_service extends service {
 	private $last_trim = 0;
 
 	/**
+	 * when the expiry dates were last checked
+	 * @var int
+	 */
+	private $last_warning = 0;
+
+	/**
 	 * Reloads settings from the config file and the database.
 	 *
 	 * @return void
@@ -131,6 +137,7 @@ class cert_manager_service extends service {
 				try {
 					$this->order_certificates();
 					$this->deploy_certificates();
+					$this->warn_expiring();
 					$this->trim_log();
 				}
 				catch (Throwable $e) {
@@ -185,6 +192,7 @@ class cert_manager_service extends service {
 			}
 			elseif ($status == 'failed') {
 				$this->warning('the order of the certificate ' . $certificate['certificate_name'] . ' failed');
+				$this->notify_failed($certificate['certificate_uuid']);
 			}
 		}
 	}
@@ -211,6 +219,146 @@ class cert_manager_service extends service {
 				$this->info('deployed ' . $result['name'] . ' to ' . $result['target']);
 			}
 		}
+	}
+
+	/**
+	 * Emails a warning for every certificate getting close to its expiry, once an hour.
+	 *
+	 * A warning goes out when the days left first drop to or below each of the warn_days, so with the default
+	 * 30,14,7,1 a certificate that is not renewed warns four times. A certificate ordered over ACME only warns
+	 * once it is past its renew days, which means its renewal is failing; an imported one cannot renew itself,
+	 * so it warns from the first of the warn days.
+	 *
+	 * @return void
+	 */
+	private function warn_expiring(): void {
+		if (time() - $this->last_warning < 3600) {
+			return;
+		}
+		$this->last_warning = time();
+
+		//the days to warn at, from the largest
+		$warn_days = array_filter(array_map('intval', explode(',', (string) $this->settings->get('cert_manager', 'warn_days', '30,14,7,1'))), function ($days) { return $days > 0; });
+		rsort($warn_days);
+		if (empty($warn_days)) {
+			return;
+		}
+
+		$sql = "select certificate_uuid, certificate_name, certificate_source, certificate_domains, certificate_renew_days, certificate_warned, ";
+		$sql .= "to_char(certificate_not_after, 'YYYY-MM-DD HH24:MI') as expires, ";
+		$sql .= "floor(extract(epoch from (certificate_not_after - now())) / 86400) as days_left ";
+		$sql .= "from v_certificates ";
+		$sql .= "where certificate_enabled = true ";
+		$sql .= "and certificate_not_after is not null ";
+		$sql .= "and certificate_not_after < now() + make_interval(days => :days) ";
+		$parameters['days'] = $warn_days[0] + 1;
+		$certificates = $this->database->select($sql, $parameters, 'all');
+		unset($sql, $parameters);
+
+		foreach ($certificates ?: [] as $certificate) {
+			$days_left = (int) $certificate['days_left'];
+
+			//an acme certificate is only a concern once its renewal is overdue
+			$renew_days = (int) ($certificate['certificate_renew_days'] ?: $this->renew_days);
+			if ($certificate['certificate_source'] == 'acme' && $days_left >= $renew_days) {
+				continue;
+			}
+
+			//the smallest warn day the certificate has reached, warned about only once
+			$reached = null;
+			foreach ($warn_days as $days) {
+				if ($days_left <= $days) {
+					$reached = $days;
+				}
+			}
+			if ($reached === null || ($certificate['certificate_warned'] !== null && $reached >= (int) $certificate['certificate_warned'])) {
+				continue;
+			}
+
+			$values = [
+				'${name}' => $certificate['certificate_name'],
+				'${domains}' => implode(', ', certificates::split_domains($certificate['certificate_domains'])),
+				'${expires}' => $certificate['expires'],
+				'${days}' => (string) max($days_left, 0),
+			];
+			$type = $certificate['certificate_source'] == 'import' ? 'certificate_expiring_import' : 'certificate_expiring_acme';
+			if ($this->send_email($type, $values)) {
+				$array['certificates'][0]['certificate_uuid'] = $certificate['certificate_uuid'];
+				$array['certificates'][0]['certificate_warned'] = $reached;
+				$p = permissions::new();
+				$p->add('certificate_edit', 'temp');
+				$this->database->save($array, false);
+				$p->delete('certificate_edit', 'temp');
+				unset($array);
+			}
+		}
+	}
+
+	/**
+	 * Emails that an order failed, the first time and then about once a day while it keeps failing.
+	 *
+	 * @param string $certificate_uuid The certificate.
+	 *
+	 * @return void
+	 */
+	private function notify_failed(string $certificate_uuid): void {
+		$sql = "select certificate_name, certificate_domains, certificate_message, certificate_attempts, ";
+		$sql .= "to_char(certificate_next_attempt, 'YYYY-MM-DD HH24:MI') as next_attempt, ";
+		$sql .= "coalesce(to_char(certificate_not_after, 'YYYY-MM-DD HH24:MI'), '') as expires ";
+		$sql .= "from v_certificates ";
+		$sql .= "where certificate_uuid = :certificate_uuid ";
+		$parameters['certificate_uuid'] = $certificate_uuid;
+		$certificate = $this->database->select($sql, $parameters, 'row');
+		unset($sql, $parameters);
+		if (empty($certificate)) {
+			return;
+		}
+
+		//the backoff reaches a day at the sixth attempt
+		$attempts = (int) $certificate['certificate_attempts'];
+		if ($attempts != 1 && $attempts < 6) {
+			return;
+		}
+		$this->send_email('certificate_failed', [
+			'${name}' => $certificate['certificate_name'],
+			'${domains}' => implode(', ', certificates::split_domains($certificate['certificate_domains'])),
+			'${message}' => (string) $certificate['certificate_message'],
+			'${next_attempt}' => (string) $certificate['next_attempt'],
+			'${expires}' => $certificate['expires'],
+		]);
+	}
+
+	/**
+	 * Emails the notify_email address, through the email of the platform.
+	 *
+	 * @param string $type   The kind of email; the language keys email_subject-<type> and email_body-<type> hold it.
+	 * @param array  $values The values to put in it.
+	 *
+	 * @return bool Whether the email was sent or queued.
+	 */
+	private function send_email(string $type, array $values): bool {
+		$recipient = (string) $this->settings->get('cert_manager', 'notify_email', '');
+		if ($recipient === '') {
+			return false;
+		}
+		$from_address = (string) $this->settings->get('email', 'smtp_from', '');
+		if ($from_address === '') {
+			$this->warning('the certificate manager cannot send email until smtp_from is set in the default settings');
+			return false;
+		}
+
+		$language = new text;
+		$text = $language->get(null, 'app/cert_manager');
+		$email = new email(['database' => $this->database, 'settings' => $this->settings]);
+		$email->recipients = $recipient;
+		$email->subject = str_replace(array_keys($values), array_values($values), $text['email_subject-' . $type]);
+		$email->body = str_replace(array_keys($values), array_values($values), $text['email_body-' . $type]);
+		$email->from_address = $from_address;
+		$email->from_name = $this->settings->get('email', 'smtp_from_name', $from_address);
+		$response = $email->send();
+		$sent = $response !== false && empty($email->error);
+		$this->info('emailed ' . $recipient . ' about ' . $values['${name}'] . ': ' . ($sent ? 'sent' : (string) $email->error));
+		return $sent;
 	}
 
 	/**
