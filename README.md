@@ -98,6 +98,12 @@ The first deployment to nginx points `/etc/ssl/certs/nginx.crt` and `/etc/ssl/pr
 the paths the stock config reads, at `/etc/ssl/cert_manager/`. The links they had before are kept
 beside them as `*.cert_manager.bak`.
 
+Before it changes anything, the deployment checks that the nginx configuration reads
+`/etc/ssl/certs/nginx.crt`. When it does not, the deployment fails and names the path nginx reads
+instead; reloading nginx would otherwise report success while it kept serving the old certificate.
+This is the case after the installer's `letsencrypt.sh` has run; see
+[Moving from the installer's Let's Encrypt](#moving-from-the-installers-lets-encrypt).
+
 ## FreeSWITCH TLS
 
 Add a **FreeSWITCH TLS** deployment to the same certificate, or to another one. The files are
@@ -113,6 +119,50 @@ TLS is off on a stock install. To turn it on for a profile, set `external_ssl_en
 `internal_ssl_enable` to `true` under **Advanced > Variables**, then clear the cache under
 **Status > SIP Status** before restarting. FusionPBX serves `sofia.conf` from its cache, so without
 that the profile restarts with the old value and does not listen for TLS.
+
+## Moving from the installer's Let's Encrypt
+
+The FusionPBX installer's `letsencrypt.sh` sets up [dehydrated](https://github.com/dehydrated-io/dehydrated).
+It writes the certificate to `/etc/dehydrated/certs/<domain>/`, copies it into
+`/etc/freeswitch/tls`, and changes `/etc/nginx/sites-available/fusionpbx` to read it from
+`/etc/dehydrated`. The certificate manager does not take that certificate over. It orders a new
+one for the same names, and dehydrated has to stop renewing, or the two will keep replacing each
+other's files in `/etc/freeswitch/tls`.
+
+1. Find the names dehydrated covers in `/etc/dehydrated/domains.txt`. A line such as
+   `*.example.com > example.com` is a wildcard for `example.com`.
+2. Point nginx back at the paths the certificate manager manages, as root, and check the result:
+
+   ```sh
+   sed -i \
+     -e 's@ssl_certificate[ \t]*/etc/dehydrated/certs/[^;]*/fullchain.pem;@ssl_certificate /etc/ssl/certs/nginx.crt;@' \
+     -e 's@ssl_certificate_key[ \t]*/etc/dehydrated/certs/[^;]*/privkey.pem;@ssl_certificate_key /etc/ssl/private/nginx.key;@' \
+     /etc/nginx/sites-available/fusionpbx
+   grep -n ssl_certificate /etc/nginx/sites-available/fusionpbx
+   nginx -t
+   ```
+
+   Do not reload nginx yet. Until the first deployment, `/etc/ssl/certs/nginx.crt` is still the
+   self-signed certificate; the deployment reloads nginx once the new certificate is in place.
+3. Add an ACME account and a certificate for those names, as in
+   [Getting a certificate for the web UI](#getting-a-certificate-for-the-web-ui), with the
+   **Web UI (nginx)** and **FreeSWITCH TLS** deployments. A wildcard needs dns-01. Ordering a new
+   certificate for names that already have one is allowed; Let's Encrypt only limits it to five
+   identical sets of names a week.
+4. When the nginx deployment shows **Deployed**, press **Restart** on the FreeSWITCH TLS
+   deployment. The installer's files are kept in `/etc/freeswitch/tls/cert_manager.bak`.
+5. Stop dehydrated renewing. The installer does not schedule it, so look for whatever was added
+   by hand, and remove the line that runs `dehydrated`:
+
+   ```sh
+   crontab -l | grep dehydrated
+   grep -rl dehydrated /etc/cron* /etc/systemd/system
+   ```
+
+   `/etc/dehydrated` can be removed once you are happy with the new certificate.
+
+If the nginx deployment ran before step 2, it shows **Failed** with the path nginx reads. Nothing
+was changed, and it is tried again within the hour.
 
 ## STIR/SHAKEN
 
