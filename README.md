@@ -58,7 +58,7 @@ deployed and watched for expiry the same way.
 
 ```sh
 cd /var/www/fusionpbx/app
-git clone <repository url> cert_manager
+git clone https://github.com/NS-Innovations/fusionpbx_cert_manager.git cert_manager
 sh /var/www/fusionpbx/app/cert_manager/resources/install.sh
 ```
 
