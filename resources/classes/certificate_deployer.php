@@ -117,6 +117,7 @@ class certificate_deployer {
 	 * @return array name, target, status and message.
 	 */
 	public function deploy(array $row): array {
+		$array = [];
 		try {
 			$certificate = cert_manager_pem::certificates($row['certificate_pem'])[0] ?? '';
 			$chain = implode('', cert_manager_pem::certificates($row['certificate_chain']));
