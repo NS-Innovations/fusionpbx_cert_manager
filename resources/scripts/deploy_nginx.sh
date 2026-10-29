@@ -27,7 +27,8 @@
 # Runs as root from cert_manager_nginx.service whenever the certificate manager
 # service, which runs as www-data, asks for nginx to use a new certificate.
 #
-# It only ever reads the two files the service wrote, copies them into a
+# It first checks that nginx reads its certificate from the paths it manages.
+# It then only ever reads the two files the service wrote, copies them into a
 # directory only root can write once they prove to be a matching certificate
 # and key, points nginx at those copies, and reloads nginx. When nginx does not
 # accept the new certificate, everything is put back as it was. The result is
@@ -56,6 +57,24 @@
 		chmod 644 "$tmp"
 		mv -f "$tmp" "$deploy/nginx.result"
 	}
+
+#list the certificate and key paths in the nginx configuration files, without comments or quotes
+	if ! config=$(nginx -T 2>&1); then
+		write_result failed "nginx did not accept its configuration: $(printf '%s' "$config" | grep -m1 emerg | tr -d '\n' | cut -c1-200)"
+		exit 1
+	fi
+	paths=$(printf '%s\n' "$config" | awk '{ sub(/^[ \t]+/, "") } /^#/ { next } $1 == "ssl_certificate" || $1 == "ssl_certificate_key" { v = $2; sub(/;.*$/, "", v); gsub(/["\047]/, "", v); print $1 " " v }')
+	managed="ssl_certificate $nginx_crt
+ssl_certificate $ssl/nginx.crt
+ssl_certificate_key $nginx_key
+ssl_certificate_key $ssl/nginx.key"
+	other=$(printf '%s\n' "$paths" | grep -vxF "$managed" | head -n 1 | cut -d ' ' -f 2)
+
+#refuse when nginx reads its certificate from somewhere else, as it does after the installer's letsencrypt.sh, since a reload would change nothing
+	if ! printf '%s\n' "$paths" | grep -qxF -e "ssl_certificate $nginx_crt" -e "ssl_certificate $ssl/nginx.crt"; then
+		write_result failed "nginx does not read $nginx_crt${other:+ (it reads $other)}; point ssl_certificate and ssl_certificate_key at $nginx_crt and $nginx_key"
+		exit 1
+	fi
 
 #copy the files into the root owned directory under new names
 	umask 077
@@ -96,7 +115,7 @@
 #reload nginx, or put everything back when it does not accept the certificate
 	if output=$(nginx -t 2>&1); then
 		systemctl reload nginx
-		write_result ok "nginx reloaded"
+		write_result ok "nginx reloaded${other:+, but some server blocks still read $other}"
 	else
 		if [ -f "$ssl/nginx.crt.prev" ]; then
 			mv -f "$ssl/nginx.crt.prev" "$ssl/nginx.crt"
