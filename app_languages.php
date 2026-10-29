@@ -108,4 +108,7 @@ $text['message-acme_account_registered']['en-gb'] = "The account is registered w
 $text['message-acme_account_register_failed']['en-us'] = "The certificate authority did not register the account:";
 $text['message-acme_account_register_failed']['en-gb'] = "The certificate authority did not register the account:";
 
+$text['option-dns_provider_manual']['en-us'] = "Manual";
+$text['option-dns_provider_manual']['en-gb'] = "Manual";
+
 ?>
