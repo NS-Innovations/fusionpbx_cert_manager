@@ -165,4 +165,145 @@ $text['message-dns_provider_test_passed']['en-gb'] = "The DNS provider works.";
 $text['message-dns_provider_test_failed']['en-us'] = "The DNS provider does not work:";
 $text['message-dns_provider_test_failed']['en-gb'] = "The DNS provider does not work:";
 
+$text['title-certificates']['en-us'] = "Certificates";
+$text['title-certificates']['en-gb'] = "Certificates";
+
+$text['title-certificate']['en-us'] = "Certificate";
+$text['title-certificate']['en-gb'] = "Certificate";
+
+$text['description-certificates']['en-us'] = "The certificates of this server. Certificates ordered over ACME are renewed before they expire and deployed wherever they are used.";
+$text['description-certificates']['en-gb'] = "The certificates of this server. Certificates ordered over ACME are renewed before they expire and deployed wherever they are used.";
+
+$text['description-certificate']['en-us'] = "The certificate is ordered by the certificate manager service shortly after it is saved, and again whenever the names or the key type change.";
+$text['description-certificate']['en-gb'] = "The certificate is ordered by the certificate manager service shortly after it is saved, and again whenever the names or the key type change.";
+
+$text['label-certificate_domains']['en-us'] = "Names";
+$text['label-certificate_domains']['en-gb'] = "Names";
+
+$text['label-certificate_source']['en-us'] = "Source";
+$text['label-certificate_source']['en-gb'] = "Source";
+
+$text['label-certificate_issuer']['en-us'] = "Issuer";
+$text['label-certificate_issuer']['en-gb'] = "Issuer";
+
+$text['label-certificate_expires']['en-us'] = "Expires";
+$text['label-certificate_expires']['en-gb'] = "Expires";
+
+$text['label-certificate_serial']['en-us'] = "Serial Number";
+$text['label-certificate_serial']['en-gb'] = "Serial Number";
+
+$text['label-certificate_validity']['en-us'] = "Valid";
+$text['label-certificate_validity']['en-gb'] = "Valid";
+
+$text['label-certificate_challenge']['en-us'] = "Validation";
+$text['label-certificate_challenge']['en-gb'] = "Validation";
+
+$text['label-certificate_key_type']['en-us'] = "Key Type";
+$text['label-certificate_key_type']['en-gb'] = "Key Type";
+
+$text['label-certificate_renew_days']['en-us'] = "Renew Days";
+$text['label-certificate_renew_days']['en-gb'] = "Renew Days";
+
+$text['label-certificate_next_attempt']['en-us'] = "Next attempt:";
+$text['label-certificate_next_attempt']['en-gb'] = "Next attempt:";
+
+$text['label-acme_account']['en-us'] = "ACME Account";
+$text['label-acme_account']['en-gb'] = "ACME Account";
+
+$text['label-dns_provider']['en-us'] = "DNS Provider";
+$text['label-dns_provider']['en-gb'] = "DNS Provider";
+
+$text['label-days']['en-us'] = "days";
+$text['label-days']['en-gb'] = "days";
+
+$text['button-renew']['en-us'] = "Renew";
+$text['button-renew']['en-gb'] = "Renew";
+
+$text['modal_title-renew']['en-us'] = "Renew";
+$text['modal_title-renew']['en-gb'] = "Renew";
+
+$text['modal_message-renew']['en-us'] = "Order the selected certificates again now?";
+$text['modal_message-renew']['en-gb'] = "Order the selected certificates again now?";
+
+$text['option-certificate_source_acme']['en-us'] = "ACME";
+$text['option-certificate_source_acme']['en-gb'] = "ACME";
+
+$text['option-certificate_source_import']['en-us'] = "Imported";
+$text['option-certificate_source_import']['en-gb'] = "Imported";
+
+$text['option-certificate_status_pending']['en-us'] = "Waiting to be ordered";
+$text['option-certificate_status_pending']['en-gb'] = "Waiting to be ordered";
+
+$text['option-certificate_status_ordering']['en-us'] = "Ordering";
+$text['option-certificate_status_ordering']['en-gb'] = "Ordering";
+
+$text['option-certificate_status_waiting_dns']['en-us'] = "Waiting for DNS records";
+$text['option-certificate_status_waiting_dns']['en-gb'] = "Waiting for DNS records";
+
+$text['option-certificate_status_valid']['en-us'] = "Valid";
+$text['option-certificate_status_valid']['en-gb'] = "Valid";
+
+$text['option-certificate_status_failed']['en-us'] = "Failed";
+$text['option-certificate_status_failed']['en-gb'] = "Failed";
+
+$text['option-certificate_status_expired']['en-us'] = "Expired";
+$text['option-certificate_status_expired']['en-gb'] = "Expired";
+
+$text['option-certificate_challenge_http_01']['en-us'] = "HTTP (http-01)";
+$text['option-certificate_challenge_http_01']['en-gb'] = "HTTP (http-01)";
+
+$text['option-certificate_challenge_dns_01']['en-us'] = "DNS (dns-01)";
+$text['option-certificate_challenge_dns_01']['en-gb'] = "DNS (dns-01)";
+
+$text['option-key_type_ec_256']['en-us'] = "ECDSA P-256";
+$text['option-key_type_ec_256']['en-gb'] = "ECDSA P-256";
+
+$text['option-key_type_ec_384']['en-us'] = "ECDSA P-384";
+$text['option-key_type_ec_384']['en-gb'] = "ECDSA P-384";
+
+$text['option-key_type_rsa_2048']['en-us'] = "RSA 2048";
+$text['option-key_type_rsa_2048']['en-gb'] = "RSA 2048";
+
+$text['option-key_type_rsa_4096']['en-us'] = "RSA 4096";
+$text['option-key_type_rsa_4096']['en-gb'] = "RSA 4096";
+
+$text['description-certificate_name']['en-us'] = "Enter the name of the certificate.";
+$text['description-certificate_name']['en-gb'] = "Enter the name of the certificate.";
+
+$text['description-certificate_domains']['en-us'] = "Enter the names the certificate covers, one per line. A wildcard such as *.example.com needs DNS validation.";
+$text['description-certificate_domains']['en-gb'] = "Enter the names the certificate covers, one per line. A wildcard such as *.example.com needs DNS validation.";
+
+$text['description-certificate_challenge']['en-us'] = "Select how the certificate authority checks that this server controls the names. HTTP needs port 80 reachable from the internet at every name. DNS adds a TXT record through the DNS provider and is the only way to validate a wildcard.";
+$text['description-certificate_challenge']['en-gb'] = "Select how the certificate authority checks that this server controls the names. HTTP needs port 80 reachable from the internet at every name. DNS adds a TXT record through the DNS provider and is the only way to validate a wildcard.";
+
+$text['description-certificate_key_type']['en-us'] = "Select the type of the private key. ECDSA P-256 suits nearly everything; choose RSA for old clients that need it.";
+$text['description-certificate_key_type']['en-gb'] = "Select the type of the private key. ECDSA P-256 suits nearly everything; choose RSA for old clients that need it.";
+
+$text['description-certificate_renew_days']['en-us'] = "Enter how many days before it expires the certificate is renewed. Leave it blank to use the default setting.";
+$text['description-certificate_renew_days']['en-gb'] = "Enter how many days before it expires the certificate is renewed. Leave it blank to use the default setting.";
+
+$text['description-certificate_enabled']['en-us'] = "Select whether the certificate is enabled. A disabled certificate is neither renewed nor deployed.";
+$text['description-certificate_enabled']['en-gb'] = "Select whether the certificate is enabled. A disabled certificate is neither renewed nor deployed.";
+
+$text['description-certificate_description']['en-us'] = "Enter the description.";
+$text['description-certificate_description']['en-gb'] = "Enter the description.";
+
+$text['message-certificate_domain_invalid']['en-us'] = "This name is not valid:";
+$text['message-certificate_domain_invalid']['en-gb'] = "This name is not valid:";
+
+$text['message-certificate_wildcard_dns']['en-us'] = "A wildcard name needs DNS validation.";
+$text['message-certificate_wildcard_dns']['en-gb'] = "A wildcard name needs DNS validation.";
+
+$text['message-certificate_renew_days_invalid']['en-us'] = "The renew days must be a whole number of at least 1.";
+$text['message-certificate_renew_days_invalid']['en-gb'] = "The renew days must be a whole number of at least 1.";
+
+$text['message-certificate_renew_requested']['en-us'] = "The certificate will be ordered by the certificate manager service.";
+$text['message-certificate_renew_requested']['en-gb'] = "The certificate will be ordered by the certificate manager service.";
+
+$text['description-certificate_acme_account']['en-us'] = "Select the ACME account that orders the certificate.";
+$text['description-certificate_acme_account']['en-gb'] = "Select the ACME account that orders the certificate.";
+
+$text['description-certificate_dns_provider']['en-us'] = "Select the DNS provider that publishes the TXT records.";
+$text['description-certificate_dns_provider']['en-gb'] = "Select the DNS provider that publishes the TXT records.";
+
 ?>
