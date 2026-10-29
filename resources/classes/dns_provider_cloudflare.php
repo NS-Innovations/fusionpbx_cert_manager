@@ -170,10 +170,24 @@ class dns_provider_cloudflare extends dns_provider {
 		if ($this->value('api_token') === '') {
 			throw new Exception('the Cloudflare API token is missing');
 		}
+
+		//the global api key needs the account email and is not accepted as a token
+		if (preg_match('/^[0-9a-f]{37}$/i', $this->value('api_token'))) {
+			throw new Exception('Cloudflare: this is the Global API Key, not an API token; create a token under My Profile > API Tokens with Zone > DNS > Edit and Zone > Zone > Read');
+		}
+
 		$response = $this->http($method, self::api . $path, ['Authorization: Bearer ' . $this->value('api_token')], $json);
 		if (!is_array($response['json']) || empty($response['json']['success'])) {
 			$error = $response['json']['errors'][0] ?? [];
 			$message = $error['message'] ?? ('HTTP ' . $response['status']);
+
+			//add the specific reasons, such as an api token in the wrong format behind invalid request headers
+			foreach ($error['error_chain'] ?? [] as $reason) {
+				if (!empty($reason['message'])) {
+					$message .= ': ' . $reason['message'];
+				}
+			}
+
 			throw new Exception('Cloudflare: ' . $message, (int) ($error['code'] ?? 0));
 		}
 		return $response['json'];

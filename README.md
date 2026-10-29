@@ -190,7 +190,7 @@ in time to get a new one from the STI-CA and import it; the deployments then upd
 
 | Provider   | Fields                     | Notes |
 |------------|----------------------------|-------|
-| Cloudflare | API Token, Zone ID         | The token needs **Zone > DNS > Edit** and **Zone > Zone > Read** on the zones of the certificates. The zone of each name is found automatically unless a Zone ID is given. |
+| Cloudflare | API Token, Zone ID         | The token needs **Zone > DNS > Edit** and **Zone > Zone > Read** on the zones of the certificates. The zone of each name is found automatically unless a Zone ID is given. Create it under **My Profile > API Tokens**; the Global API Key is not accepted. |
 | Manual     | none                       | The certificate page shows the TXT records to add at your DNS host. The order waits for them for as long as it is valid, up to a few days. |
 
 Before answering a dns-01 challenge, the service checks that every resolver in
