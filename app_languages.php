@@ -1,0 +1,90 @@
+<?php
+
+$text['title-acme_accounts']['en-us'] = "ACME Accounts";
+$text['title-acme_accounts']['en-gb'] = "ACME Accounts";
+
+$text['title-acme_account']['en-us'] = "ACME Account";
+$text['title-acme_account']['en-gb'] = "ACME Account";
+
+$text['description-acme_accounts']['en-us'] = "An ACME account registers this server with a certificate authority such as Let's Encrypt. Every certificate ordered over ACME is ordered through one of these accounts.";
+$text['description-acme_accounts']['en-gb'] = "An ACME account registers this server with a certificate authority such as Let's Encrypt. Every certificate ordered over ACME is ordered through one of these accounts.";
+
+$text['description-acme_account']['en-us'] = "Choose the certificate authority the account belongs to and how it can reach you.";
+$text['description-acme_account']['en-gb'] = "Choose the certificate authority the account belongs to and how it can reach you.";
+
+$text['label-acme_account_directory']['en-us'] = "Certificate Authority";
+$text['label-acme_account_directory']['en-gb'] = "Certificate Authority";
+
+$text['label-acme_account_eab_kid']['en-us'] = "EAB Key ID";
+$text['label-acme_account_eab_kid']['en-gb'] = "EAB Key ID";
+
+$text['label-acme_account_eab_hmac']['en-us'] = "EAB HMAC Key";
+$text['label-acme_account_eab_hmac']['en-gb'] = "EAB HMAC Key";
+
+$text['label-email']['en-us'] = "Email";
+$text['label-email']['en-gb'] = "Email";
+
+$text['label-unchanged']['en-us'] = "Unchanged";
+$text['label-unchanged']['en-gb'] = "Unchanged";
+
+$text['option-letsencrypt']['en-us'] = "Let's Encrypt";
+$text['option-letsencrypt']['en-gb'] = "Let's Encrypt";
+
+$text['option-letsencrypt_staging']['en-us'] = "Let's Encrypt Staging";
+$text['option-letsencrypt_staging']['en-gb'] = "Let's Encrypt Staging";
+
+$text['option-zerossl']['en-us'] = "ZeroSSL";
+$text['option-zerossl']['en-gb'] = "ZeroSSL";
+
+$text['option-google']['en-us'] = "Google Trust Services";
+$text['option-google']['en-gb'] = "Google Trust Services";
+
+$text['option-custom']['en-us'] = "Custom";
+$text['option-custom']['en-gb'] = "Custom";
+
+$text['option-status_unregistered']['en-us'] = "Not registered";
+$text['option-status_unregistered']['en-gb'] = "Not registered";
+
+$text['option-status_valid']['en-us'] = "Valid";
+$text['option-status_valid']['en-gb'] = "Valid";
+
+$text['option-status_deactivated']['en-us'] = "Deactivated";
+$text['option-status_deactivated']['en-gb'] = "Deactivated";
+
+$text['option-status_revoked']['en-us'] = "Revoked";
+$text['option-status_revoked']['en-gb'] = "Revoked";
+
+$text['description-acme_account_name']['en-us'] = "Enter the name of the account.";
+$text['description-acme_account_name']['en-gb'] = "Enter the name of the account.";
+
+$text['description-acme_account_directory']['en-us'] = "Select the certificate authority, or select Custom and enter the URL of its ACME directory. Let's Encrypt Staging issues certificates that browsers do not trust and is meant for testing.";
+$text['description-acme_account_directory']['en-gb'] = "Select the certificate authority, or select Custom and enter the URL of its ACME directory. Let's Encrypt Staging issues certificates that browsers do not trust and is meant for testing.";
+
+$text['description-acme_account_email']['en-us'] = "Enter the contact email of the account. The certificate authority may send notices about the account to it.";
+$text['description-acme_account_email']['en-gb'] = "Enter the contact email of the account. The certificate authority may send notices about the account to it.";
+
+$text['description-acme_account_eab_kid']['en-us'] = "Enter the key ID of the external account binding. ZeroSSL and Google Trust Services require one, and give it in their dashboard.";
+$text['description-acme_account_eab_kid']['en-gb'] = "Enter the key ID of the external account binding. ZeroSSL and Google Trust Services require one, and give it in their dashboard.";
+
+$text['description-acme_account_eab_hmac']['en-us'] = "Enter the HMAC key of the external account binding. It is stored encrypted. Leave it blank to keep the saved key.";
+$text['description-acme_account_eab_hmac']['en-gb'] = "Enter the HMAC key of the external account binding. It is stored encrypted. Leave it blank to keep the saved key.";
+
+$text['description-acme_account_enabled']['en-us'] = "Select whether the account is enabled. Certificates of a disabled account are not renewed.";
+$text['description-acme_account_enabled']['en-gb'] = "Select whether the account is enabled. Certificates of a disabled account are not renewed.";
+
+$text['description-acme_account_description']['en-us'] = "Enter the description.";
+$text['description-acme_account_description']['en-gb'] = "Enter the description.";
+
+$text['message-acme_account_in_use']['en-us'] = "An account that a certificate uses cannot be deleted.";
+$text['message-acme_account_in_use']['en-gb'] = "An account that a certificate uses cannot be deleted.";
+
+$text['message-acme_account_directory_invalid']['en-us'] = "The certificate authority must be an https URL.";
+$text['message-acme_account_directory_invalid']['en-gb'] = "The certificate authority must be an https URL.";
+
+$text['message-acme_account_email_invalid']['en-us'] = "The email address is not valid.";
+$text['message-acme_account_email_invalid']['en-gb'] = "The email address is not valid.";
+
+$text['message-key_file_missing']['en-us'] = "The key file that encrypts the stored secrets cannot be read. Run the install script of the app as root.";
+$text['message-key_file_missing']['en-gb'] = "The key file that encrypts the stored secrets cannot be read. Run the install script of the app as root.";
+
+?>
