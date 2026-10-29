@@ -105,6 +105,25 @@
 		$certificate_deployments_delete = $_POST['certificate_deployments_delete'] ?? [];
 	}
 
+//restart the sip profiles of a freeswitch deployment, without saving the form
+	if (is_uuid($_POST['restart_deployment'] ?? '') && $action == 'update' && permission_exists('certificate_deployment_restart')) {
+		$token = new token;
+		if (!$token->validate($_SERVER['PHP_SELF'])) {
+			message::add($text['message-invalid_token'],'negative');
+			header('Location: certificates.php');
+			exit;
+		}
+		try {
+			$deployer = new certificate_deployer(['database' => $database, 'settings' => $settings]);
+			message::add(escape($deployer->restart_freeswitch($_POST['restart_deployment'])));
+		}
+		catch (Exception $e) {
+			message::add($text['message-deployment_restart_failed'].' '.escape($e->getMessage()), 'negative', 7000);
+		}
+		header("Location: certificate_edit.php?id=".urlencode($certificate_uuid).($query_string ? '&'.$query_string : ''));
+		exit;
+	}
+
 //process the http post data
 	if (count($_POST) > 0 && empty($_POST["persistformvar"])) {
 
@@ -657,6 +676,10 @@
 					echo "<br /><span style='font-size: 85%;'>".escape($row['deployment_message'])."</span>";
 				}
 				echo "\n";
+				if ($row['deployment_target'] == 'freeswitch' && $deployment_status == 'restart' && permission_exists('certificate_deployment_restart')) {
+					echo "				<br />".button::create(['type'=>'button','label'=>$text['button-restart'],'icon'=>$settings->get('theme', 'button_icon_reload'),'onclick'=>"document.getElementById('restart_deployment').value = '".escape($row['certificate_deployment_uuid'])."'; modal_open('modal-restart');"])."\n";
+					$show_restart_modal = true;
+				}
 			}
 			echo "			</td>\n";
 			if ($show_deployment_delete && permission_exists('certificate_deployment_delete')) {
@@ -729,6 +752,15 @@
 	echo "<input type='hidden' name='".$token['name']."' value='".$token['hash']."'>\n";
 
 	echo "</form>\n";
+
+//confirm restarting the sip profiles, which drops their calls
+	if (!empty($show_restart_modal)) {
+		echo "<form method='post' id='frm_restart'>\n";
+		echo "<input type='hidden' name='restart_deployment' id='restart_deployment' value=''>\n";
+		echo "<input type='hidden' name='".$token['name']."' value='".$token['hash']."'>\n";
+		echo "</form>\n";
+		echo modal::create(['id'=>'modal-restart','title'=>$text['modal_title-restart'],'message'=>$text['modal_message-restart'],'actions'=>button::create(['type'=>'button','label'=>$text['button-continue'],'icon'=>'check','id'=>'btn_restart','style'=>'float: right; margin-left: 15px;','collapse'=>'never','onclick'=>"modal_close(); document.getElementById('frm_restart').submit();"])]);
+	}
 
 //show only the fields of the selected source
 	echo "<script>\n";

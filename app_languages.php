@@ -345,8 +345,8 @@ $text['label-deployment_target']['en-gb'] = "Target";
 $text['label-deployment_options']['en-us'] = "Options";
 $text['label-deployment_options']['en-gb'] = "Options";
 
-$text['description-certificate_deployments']['en-us'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart. STIR/SHAKEN writes the key and certificate the identity app signs calls with.";
-$text['description-certificate_deployments']['en-gb'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart. STIR/SHAKEN writes the key and certificate the identity app signs calls with.";
+$text['description-certificate_deployments']['en-us'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart. STIR/SHAKEN writes the key and certificate the identity app signs calls with. For FreeSWITCH TLS, Options names the SIP profiles Restart restarts, separated by commas; left blank, every running profile using TLS or WSS is restarted.";
+$text['description-certificate_deployments']['en-gb'] = "Select where the certificate is used. It is written there again by the service whenever it is renewed or imported again. Web UI hands the certificate to the root helper of the app, which reloads nginx and goes back to the previous certificate if nginx does not accept it. FreeSWITCH TLS writes the files of the TLS directory; the SIP profiles using TLS read them when they restart. STIR/SHAKEN writes the key and certificate the identity app signs calls with. For FreeSWITCH TLS, Options names the SIP profiles Restart restarts, separated by commas; left blank, every running profile using TLS or WSS is restarted.";
 
 $text['option-deployment_target_freeswitch']['en-us'] = "FreeSWITCH TLS";
 $text['option-deployment_target_freeswitch']['en-gb'] = "FreeSWITCH TLS";
@@ -377,5 +377,14 @@ $text['label-certificate_publish']['en-gb'] = "Publish";
 
 $text['description-certificate_publish']['en-us'] = "Select whether the certificate and its intermediates are served without a login at the URL shown, which is what STIR/SHAKEN needs: set identity.certificate_url of the identity app to this URL so it goes in the x5u of every signature. The private key is never published.";
 $text['description-certificate_publish']['en-gb'] = "Select whether the certificate and its intermediates are served without a login at the URL shown, which is what STIR/SHAKEN needs: set identity.certificate_url of the identity app to this URL so it goes in the x5u of every signature. The private key is never published.";
+
+$text['modal_title-restart']['en-us'] = "Restart SIP Profiles";
+$text['modal_title-restart']['en-gb'] = "Restart SIP Profiles";
+
+$text['modal_message-restart']['en-us'] = "Restarting a SIP profile drops the calls on it, and its phones have to register again. Restart the profiles that use this certificate now?";
+$text['modal_message-restart']['en-gb'] = "Restarting a SIP profile drops the calls on it, and its phones have to register again. Restart the profiles that use this certificate now?";
+
+$text['message-deployment_restart_failed']['en-us'] = "The SIP profiles could not be restarted:";
+$text['message-deployment_restart_failed']['en-gb'] = "The SIP profiles could not be restarted:";
 
 ?>

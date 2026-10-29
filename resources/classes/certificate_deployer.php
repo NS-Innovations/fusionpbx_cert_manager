@@ -302,6 +302,64 @@ class certificate_deployer {
 	}
 
 	/**
+	 * Restarts the SIP profiles that use the certificate of a FreeSWITCH deployment, so they load it.
+	 *
+	 * The profiles are the ones named in the options of the deployment, separated by commas. Without any, every
+	 * running profile that reports a TLS or WSS address is restarted. Restarting a profile drops its calls and
+	 * its registrations have to be renewed, which is why this is only ever done when somebody asks.
+	 *
+	 * @param string $certificate_deployment_uuid The deployment.
+	 *
+	 * @return string The profiles restarted.
+	 * @throws Exception When the deployment is not a FreeSWITCH one or the switch cannot be reached.
+	 */
+	public function restart_freeswitch(string $certificate_deployment_uuid): string {
+		$sql = "select d.certificate_deployment_uuid, d.deployment_target, d.deployment_options, c.certificate_uuid, c.certificate_name ";
+		$sql .= "from v_certificate_deployments as d ";
+		$sql .= "join v_certificates as c on c.certificate_uuid = d.certificate_uuid ";
+		$sql .= "where d.certificate_deployment_uuid = :certificate_deployment_uuid ";
+		$parameters['certificate_deployment_uuid'] = $certificate_deployment_uuid;
+		$row = $this->database->select($sql, $parameters, 'row');
+		unset($sql, $parameters);
+		if (empty($row) || $row['deployment_target'] != 'freeswitch') {
+			throw new Exception('the deployment is not a FreeSWITCH one');
+		}
+
+		//the profiles named in the options, or every running profile using tls
+		$profiles = preg_split('/[\s,;]+/', (string) $row['deployment_options'], -1, PREG_SPLIT_NO_EMPTY);
+		foreach ($profiles as $profile) {
+			if (!preg_match('/^[A-Za-z0-9_.-]+$/', $profile)) {
+				throw new Exception('not a SIP profile name: ' . $profile);
+			}
+		}
+		if (empty($profiles)) {
+			$status = event_socket::api('sofia status');
+			if ($status === false) {
+				throw new Exception('the switch could not be reached');
+			}
+			preg_match_all('/^\s*(\S+)\s+profile\s+\S+\s+RUNNING/m', $status, $matches);
+			foreach ($matches[1] as $profile) {
+				$details = (string) event_socket::api('sofia status profile ' . $profile);
+				if (preg_match('/^(TLS-URL|WSS-BIND-URL)\s/m', $details)) {
+					$profiles[] = $profile;
+				}
+			}
+		}
+
+		//restart them
+		$restarted = [];
+		foreach ($profiles as $profile) {
+			if (event_socket::api("sofia profile '" . $profile . "' restart") === false) {
+				throw new Exception('the switch could not be reached');
+			}
+			$restarted[] = $profile;
+		}
+		$message = !empty($restarted) ? 'restarted the SIP profiles ' . implode(', ', $restarted) : 'no running SIP profile uses TLS, so none was restarted';
+		$this->record($row, 'deployed', $message);
+		return $message;
+	}
+
+	/**
 	 * Writes a STIR/SHAKEN certificate where the identity app reads it.
 	 *
 	 * The identity app signs with ES256, so only a P-256 key is accepted. The file names are the defaults of
