@@ -104,8 +104,9 @@ class certificate_order {
 	 */
 	public function __construct(array $setting_array = []) {
 		$this->database = $setting_array['database'] ?? database::new();
-		$this->settings = $setting_array['settings'] ?? new settings(['database' => $this->database]);
-		$this->crypto = $setting_array['crypto'] ?? new cert_manager_crypto(['settings' => $this->settings]);
+		//the paths come from the default settings only, never the user settings a page's settings include
+		$this->settings = new settings(['database' => $this->database]);
+		$this->crypto = $setting_array['crypto'] ?? new cert_manager_crypto(['database' => $this->database]);
 	}
 
 	/**
@@ -143,14 +144,21 @@ class certificate_order {
 			}
 			$this->client = $this->client();
 
-			//an order that has outlived itself cannot be completed
-			if (!empty($this->state['expires']) && $this->state['expires'] < time()) {
+			//an order that has outlived itself cannot be completed, unless it was finalized, when the certificate may be
+			//waiting to be collected
+			if (!empty($this->state['expires']) && $this->state['expires'] < time() && ($this->state['stage'] ?? '') != 'finalized') {
 				throw new Exception('the order expired before it was completed');
 			}
 
 			//take the step the order is at
 			switch ($this->state['stage'] ?? '') {
 				case '':
+					$this->start();
+					break;
+				case 'placing':
+					//an order interrupted while its challenges were published is let go of and placed again
+					$this->clean_up();
+					$this->state = [];
 					$this->start();
 					break;
 				case 'published':
@@ -165,10 +173,39 @@ class certificate_order {
 			}
 			return $this->state['stage'] == 'done' ? 'valid' : $this->status();
 		}
-		catch (Exception $e) {
+		catch (Throwable $e) {
+			//an error, such as a reply of the authority missing a value, fails the order as an exception does, so it is
+			//not taken up again on every pass
 			$this->fail($e->getMessage());
 			return 'failed';
 		}
+	}
+
+	/**
+	 * Lets go of the order in progress, removing what it published, as when the names or the key type change.
+	 *
+	 * @param string $certificate_uuid The certificate.
+	 *
+	 * @return void
+	 */
+	public function abandon(string $certificate_uuid): void {
+		$sql = "select certificate_uuid, certificate_order, dns_provider_uuid from v_certificates where certificate_uuid = :certificate_uuid ";
+		$this->certificate = $this->database->select($sql, ['certificate_uuid' => $certificate_uuid], 'row') ?: [];
+		unset($sql);
+		if (empty($this->certificate) || empty($this->certificate['certificate_order'])) {
+			return;
+		}
+		$this->state = json_decode((string) $this->certificate['certificate_order'], true) ?: [];
+		$this->provider = null;
+		try {
+			$this->clean_up();
+		}
+		catch (Throwable $e) {
+			$this->log('warning', 'clean up failed: ' . $e->getMessage());
+		}
+		$array['certificates'][0]['certificate_uuid'] = $certificate_uuid;
+		$array['certificates'][0]['certificate_order'] = null;
+		$this->save($array, 'certificate_edit');
 	}
 
 	/**
@@ -188,8 +225,10 @@ class certificate_order {
 
 		//place the order
 		$order = $this->client->new_order($domains);
+		//the order is placing until every challenge is published, so one interrupted part way is placed again
 		$this->state = [
-			'stage' => 'published',
+			'stage' => 'placing',
+			'domains' => $domains,
 			'url' => $order['url'],
 			'finalize' => $order['finalize'],
 			'expires' => !empty($order['expires']) ? strtotime($order['expires']) : time() + 86400,
@@ -228,6 +267,7 @@ class certificate_order {
 			$this->state['authorizations'][] = $entry;
 			$this->save_state('ordering');
 		}
+		$this->state['stage'] = 'published';
 		$this->state['published'] = time();
 		$this->save_state($this->status());
 		$this->log('info', 'challenges published');
@@ -372,7 +412,8 @@ class certificate_order {
 		//every name is validated, so the order can be finalized
 		$this->log('info', 'every name is validated');
 		$private_key = $this->crypto->decrypt($this->state['key']);
-		$csr = acme_client::csr($private_key, certificates::split_domains($this->certificate['certificate_domains']));
+		//the names the order was placed for, which the names of the certificate may no longer be
+		$csr = acme_client::csr($private_key, $this->state['domains'] ?? certificates::split_domains($this->certificate['certificate_domains']));
 		$this->client->finalize($this->state['finalize'], $csr);
 		$this->state['stage'] = 'finalized';
 		$this->save_state('ordering');

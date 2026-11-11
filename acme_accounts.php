@@ -187,7 +187,7 @@
 	echo "<tr class='list-header'>\n";
 	if (permission_exists('acme_account_edit') || permission_exists('acme_account_delete')) {
 		echo "	<th class='checkbox'>\n";
-		echo "		<input type='checkbox' id='checkbox_all' name='checkbox_all' onclick='list_all_toggle(); checkbox_on_change(this);' ".!empty($acme_accounts ?: "style='visibility: hidden;'").">\n";
+		echo "		<input type='checkbox' id='checkbox_all' name='checkbox_all' onclick='list_all_toggle(); checkbox_on_change(this);' ".(empty($acme_accounts) ? "style='visibility: hidden;'" : null).">\n";
 		echo "	</th>\n";
 	}
 	echo th_order_by('acme_account_name', $text['label-name'], $order_by, $order, null, null, $query_string);

@@ -181,7 +181,7 @@
 	echo "<tr class='list-header'>\n";
 	if (permission_exists('dns_provider_edit') || permission_exists('dns_provider_delete')) {
 		echo "	<th class='checkbox'>\n";
-		echo "		<input type='checkbox' id='checkbox_all' name='checkbox_all' onclick='list_all_toggle(); checkbox_on_change(this);' ".!empty($dns_providers ?: "style='visibility: hidden;'").">\n";
+		echo "		<input type='checkbox' id='checkbox_all' name='checkbox_all' onclick='list_all_toggle(); checkbox_on_change(this);' ".(empty($dns_providers) ? "style='visibility: hidden;'" : null).">\n";
 		echo "	</th>\n";
 	}
 	echo th_order_by('dns_provider_name', $text['label-name'], $order_by, $order, null, null, $query_string);

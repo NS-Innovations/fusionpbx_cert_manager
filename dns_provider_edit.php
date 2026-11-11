@@ -64,13 +64,19 @@
 		$dns_provider_name = $_POST['dns_provider_name'] ?? '';
 		$dns_provider_type = $_POST['dns_provider_type'] ?? '';
 		$dns_provider_values = $_POST['dns_provider_settings'][$dns_provider_type] ?? [];
-		$dns_provider_enabled = $_POST['dns_provider_enabled'] ?? 'false';
+		$dns_provider_enabled = ($_POST['dns_provider_enabled'] ?? '') == 'true' ? 'true' : 'false';
 		$dns_provider_description = $_POST['dns_provider_description'] ?? '';
 		$dns_provider_test = ($_POST['dns_provider_test'] ?? '') == 'true';
 	}
 
 //process the http post data
 	if (count($_POST) > 0 && empty($_POST["persistformvar"])) {
+
+		//the permission of the action is needed, add for a new one and edit for one that is there
+			if (($action == 'update' && !permission_exists('dns_provider_edit')) || ($action == 'add' && !permission_exists('dns_provider_add'))) {
+				echo "access denied";
+				exit;
+			}
 
 		//validate the token
 			$token = new token;

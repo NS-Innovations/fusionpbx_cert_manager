@@ -200,7 +200,7 @@
 	echo "<tr class='list-header'>\n";
 	if (permission_exists('certificate_renew') || permission_exists('certificate_edit') || permission_exists('certificate_delete')) {
 		echo "	<th class='checkbox'>\n";
-		echo "		<input type='checkbox' id='checkbox_all' name='checkbox_all' onclick='list_all_toggle(); checkbox_on_change(this);' ".!empty($certificates ?: "style='visibility: hidden;'").">\n";
+		echo "		<input type='checkbox' id='checkbox_all' name='checkbox_all' onclick='list_all_toggle(); checkbox_on_change(this);' ".(empty($certificates) ? "style='visibility: hidden;'" : null).">\n";
 		echo "	</th>\n";
 	}
 	echo th_order_by('certificate_name', $text['label-name'], $order_by, $order, null, null, $query_string);

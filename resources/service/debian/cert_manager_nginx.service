@@ -7,3 +7,5 @@ Description=FusionPBX Certificate Manager nginx deployment
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/cert_manager_deploy_nginx
+; a helper that hangs, such as on a file it can not read, is stopped rather than holding every later request
+TimeoutStartSec=120

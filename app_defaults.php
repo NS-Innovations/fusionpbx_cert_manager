@@ -29,7 +29,9 @@
 	if ($domains_processed == 1) {
 
 		//create the key that encrypts the stored secrets, when it is missing and its directory can be written
-			$key_file = $settings->get('cert_manager', 'key_file', '/etc/fusionpbx/cert_manager.key');
+			//from the default settings only, never a user setting of whoever runs the upgrade
+			$default_settings = new settings(['database' => $database]);
+			$key_file = $default_settings->get('cert_manager', 'key_file', '/etc/fusionpbx/cert_manager.key');
 			if (!empty($key_file) && !file_exists($key_file) && is_writable(dirname($key_file))) {
 				$old_umask = umask(0027);
 				if (file_put_contents($key_file, cert_manager_crypto::new_key() . "\n", LOCK_EX) !== false) {

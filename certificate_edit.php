@@ -98,7 +98,7 @@
 		$certificate_key_type = $_POST['certificate_key_type'] ?? '';
 		$certificate_renew_days = trim($_POST['certificate_renew_days'] ?? '');
 		$certificate_publish = ($_POST['certificate_publish'] ?? '') == 'true' ? 'true' : 'false';
-		$certificate_enabled = $_POST['certificate_enabled'] ?? 'false';
+		$certificate_enabled = ($_POST['certificate_enabled'] ?? '') == 'true' ? 'true' : 'false';
 		$certificate_description = $_POST['certificate_description'] ?? '';
 		$certificate_renew_now = ($_POST['certificate_renew_now'] ?? '') == 'true';
 		$certificate_deployments = $_POST['certificate_deployments'] ?? [];
@@ -126,6 +126,12 @@
 
 //process the http post data
 	if (count($_POST) > 0 && empty($_POST["persistformvar"])) {
+
+		//the permission of the action is needed, add for a new one and edit for one that is there
+			if (($action == 'update' && !permission_exists('certificate_edit')) || ($action == 'add' && !permission_exists('certificate_add'))) {
+				echo "access denied";
+				exit;
+			}
 
 		//validate the token
 			$token = new token;
@@ -181,7 +187,12 @@
 					$msg .= $text['message-certificate_key_invalid']."<br>\n";
 				}
 				if ($imported_key === '' && !empty($saved['certificate_private_key'])) {
-					$imported_key = $crypto->decrypt($saved['certificate_private_key']);
+					try {
+						$imported_key = $crypto->decrypt($saved['certificate_private_key']);
+					}
+					catch (Exception $e) {
+						$imported_key = '';
+					}
 				}
 				if (empty($imported)) {
 					$msg .= $text['message-certificate_pem_invalid']."<br>\n";
@@ -203,7 +214,8 @@
 				echo "<table><tr><td>\n";
 				echo $msg."<br />";
 				echo "</td></tr></table>\n";
-				persistformvar($_POST);
+				//the private key pasted is not written back into the page
+				persistformvar(array_diff_key($_POST, ['certificate_private_key' => true]));
 				echo "</div>\n";
 				require_once "resources/footer.php";
 				return;
@@ -236,6 +248,8 @@
 				if ($action == 'add') {
 					$array['certificates'][0]['certificate_status'] = 'pending';
 				}
+				//an order in progress for the old names or key type is let go of, as its finalize would be refused
+				$abandon_order = $names_changed || $key_changed;
 				if ($action == 'add' || $names_changed || $key_changed || ($certificate_renew_now && permission_exists('certificate_renew'))) {
 					$array['certificates'][0]['certificate_renew'] = 'true';
 					$array['certificates'][0]['certificate_attempts'] = 0;
@@ -314,6 +328,11 @@
 					}
 					$y++;
 				}
+			}
+
+		//let go of the order in progress for the old names or key type, removing what it published
+			if (!empty($abandon_order) && $action == 'update') {
+				(new certificate_order(['database' => $database]))->abandon($certificate_uuid);
 			}
 
 		//save the data

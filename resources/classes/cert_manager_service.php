@@ -134,14 +134,14 @@ class cert_manager_service extends service {
 
 			//the service can be turned off without stopping it
 			if ($this->enabled) {
-				try {
-					$this->order_certificates();
-					$this->deploy_certificates();
-					$this->warn_expiring();
-					$this->trim_log();
-				}
-				catch (Throwable $e) {
-					$this->error($e->getMessage());
+				//each part runs on its own, so one that fails does not keep the others from running
+				foreach (['order_certificates', 'deploy_certificates', 'warn_expiring', 'trim_log'] as $part) {
+					try {
+						$this->$part();
+					}
+					catch (Throwable $e) {
+						$this->error($part . ': ' . $e->getMessage());
+					}
 				}
 			}
 
@@ -356,8 +356,12 @@ class cert_manager_service extends service {
 		$text = $language->get(null, 'app/cert_manager');
 		$email = new email(['database' => $this->database, 'settings' => $this->settings]);
 		$email->recipients = $recipient;
-		$email->subject = str_replace(array_keys($values), array_values($values), $text['email_subject-' . $type]);
-		$email->body = str_replace(array_keys($values), array_values($values), $text['email_body-' . $type]);
+		//the values, such as the reply of an authority, are put in once each, the body taking them escaped, as the email
+		//is sent as html and a value could otherwise add markup to it
+		$subject_values = array_map(function ($value) { return str_replace(["\r", "\n"], ' ', (string) $value); }, $values);
+		$body_values = array_map(function ($value) { return htmlspecialchars((string) $value, ENT_QUOTES); }, $values);
+		$email->subject = strtr($text['email_subject-' . $type], $subject_values);
+		$email->body = strtr($text['email_body-' . $type], $body_values);
 		$email->from_address = $from_address;
 		$email->from_name = $this->settings->get('email', 'smtp_from_name', $from_address);
 		$response = $email->send();

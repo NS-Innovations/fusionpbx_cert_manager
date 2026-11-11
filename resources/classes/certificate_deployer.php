@@ -36,6 +36,13 @@
 class certificate_deployer {
 
 	/**
+	 * The directory the root nginx helper reads, fixed in the helper and so here, whatever store_dir says
+	 *
+	 * @var string
+	 */
+	const nginx_store = '/etc/fusionpbx/cert_manager';
+
+	/**
 	 * declare constant variables
 	 */
 	const app_name = 'cert_manager';
@@ -78,8 +85,9 @@ class certificate_deployer {
 	 */
 	public function __construct(array $setting_array = []) {
 		$this->database = $setting_array['database'] ?? database::new();
-		$this->settings = $setting_array['settings'] ?? new settings(['database' => $this->database]);
-		$this->crypto = $setting_array['crypto'] ?? new cert_manager_crypto(['settings' => $this->settings]);
+		//the paths come from the default settings only, never the user settings a page's settings include
+		$this->settings = new settings(['database' => $this->database]);
+		$this->crypto = $setting_array['crypto'] ?? new cert_manager_crypto(['database' => $this->database]);
 	}
 
 	/**
@@ -197,7 +205,7 @@ class certificate_deployer {
 	 * @throws Exception When a file cannot be written.
 	 */
 	private function deploy_nginx(string $certificate, string $chain, string $private_key, string $serial): array {
-		$store = rtrim($this->settings->get('cert_manager', 'store_dir', '/etc/fusionpbx/cert_manager'), '/');
+		$store = self::nginx_store;
 		foreach ([$store . '/live/nginx', $store . '/deploy'] as $directory) {
 			if (!is_dir($directory) || !is_writable($directory)) {
 				throw new Exception('the directory ' . $directory . ' does not exist or cannot be written; run the install script of the app');
@@ -225,7 +233,7 @@ class certificate_deployer {
 		unset($sql);
 
 		$results = [];
-		$store = rtrim($this->settings->get('cert_manager', 'store_dir', '/etc/fusionpbx/cert_manager'), '/');
+		$store = self::nginx_store;
 		foreach ($rows ?: [] as $row) {
 			$result = explode(' ', trim((string) @file_get_contents($store . '/deploy/nginx.result')), 3);
 			if (count($result) == 3 && $result[1] === $row['deployment_serial']) {
@@ -274,10 +282,24 @@ class certificate_deployer {
 		//keep what was there before the first deployment
 		$backup = $directory . '/cert_manager.bak';
 		if (!is_dir($backup)) {
-			mkdir($backup, 0750);
+			//the backup is made in a directory of its own, moved into place only once every file is copied, so a backup
+			//that failed part way is made again rather than taken as done
+			$partial = $backup . '.partial';
+			if (is_dir($partial)) {
+				array_map('unlink', glob($partial . '/*') ?: []);
+				rmdir($partial);
+			}
+			if (!mkdir($partial, 0750)) {
+				throw new Exception('the backup of ' . $directory . ' could not be made');
+			}
 			foreach (glob($directory . '/*.pem') ?: [] as $file) {
-				copy($file, $backup . '/' . basename($file));
-				chmod($backup . '/' . basename($file), 0640);
+				if (!copy($file, $partial . '/' . basename($file))) {
+					throw new Exception('the backup of ' . $file . ' could not be made');
+				}
+				chmod($partial . '/' . basename($file), 0640);
+			}
+			if (!rename($partial, $backup)) {
+				throw new Exception('the backup of ' . $directory . ' could not be made');
 			}
 		}
 

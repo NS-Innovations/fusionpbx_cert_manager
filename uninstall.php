@@ -85,8 +85,16 @@
 //connect to the database
 	$database = database::new();
 	$settings = new settings(['database' => $database]);
-	$key_file = $settings->get('cert_manager', 'key_file', '/etc/fusionpbx/cert_manager.key');
-	$store_dir = $settings->get('cert_manager', 'store_dir', '/etc/fusionpbx/cert_manager');
+	//the paths the install script made, never ones a setting names, as a superadmin can change a setting from the web
+	//and this runs as root
+	$key_file = '/etc/fusionpbx/cert_manager.key';
+	$store_dir = '/etc/fusionpbx/cert_manager';
+	foreach (['key_file' => $key_file, 'store_dir' => $store_dir] as $setting => $path) {
+		$set = $settings->get('cert_manager', $setting, $path);
+		if ($set !== $path) {
+			echo "  the ".$setting." setting names ".$set.", which is left alone; remove it by hand when it is the app's\n";
+		}
+	}
 
 	echo "\n";
 	echo "Removing ".$app_name."\n";

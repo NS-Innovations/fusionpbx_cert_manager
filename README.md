@@ -69,10 +69,16 @@ The install script needs root. It:
 2. creates `/etc/fusionpbx/cert_manager.key`, the key that encrypts the stored secrets, once;
 3. installs the nginx helper as `/usr/local/sbin/cert_manager_deploy_nginx` with
    `cert_manager_nginx.path` and `cert_manager_nginx.service`, and enables the path unit;
-4. runs `core/upgrade/upgrade.php` for the schema, `--menu default`, `--group` and
-   `--service update`, which installs and starts the `cert_manager` service.
+4. runs `core/upgrade/upgrade.php` for the schema, `--menu default` and `--group` as `www-data`,
+   as they run the code of every app, and `--service update` as root, which installs and starts
+   the `cert_manager` service.
 
-Running it again is harmless, and is how an updated nginx helper is installed after a `git pull`.
+Running it again is harmless. After a `git pull` that changes the nginx helper or its units, it
+shows the changes and stops, as the helper runs as root; read them, then install them with:
+
+```sh
+sh /var/www/fusionpbx/app/cert_manager/resources/install.sh --update-helper
+```
 
 **Back up `/etc/fusionpbx/cert_manager.key` along with the database.** Without it the stored keys
 and credentials cannot be decrypted.
@@ -253,8 +259,13 @@ web UI (php-fpm, www-data)  --rows-->  database  <--polls--  cert_manager servic
   a restart of the service.
 - Only the nginx helper runs as root, and it only reads the two files the service wrote. It runs
   from a root owned copy in `/usr/local/sbin`, never from the web directory, which `www-data` can
-  write. It copies the files into a root owned directory before checking them, so nginx never reads
-  a path `www-data` can change.
+  write. Everything in the directories the service writes it reads and writes as `www-data`, held to
+  a size and a time, so a link or a special file planted there reaches nothing `www-data` could not
+  already reach. It copies the files into a root owned directory before checking them, so nginx
+  never reads a path `www-data` can change.
+- The paths and the key file are read from the default settings only, never from user settings,
+  which an admin can add in any category. The uninstall script removes the paths the install script
+  made, never ones a setting names.
 - Every certificate gets a new key when it is ordered or renewed.
 
 ---

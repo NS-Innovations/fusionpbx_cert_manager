@@ -70,12 +70,14 @@ class cert_manager_crypto {
 	 * @return void
 	 */
 	public function __construct(array $setting_array = []) {
-		//use the key file given, or the one in the default settings
+		//use the key file given, or the one in the default settings; a settings object handed in is not used, as the
+		//settings of a page include user settings, which an admin can add in any category, and a key file chosen there
+		//would seal the secrets with a key that admin knows
 		if (!empty($setting_array['key_file'])) {
 			$this->key_file = $setting_array['key_file'];
 		}
 		else {
-			$settings = $setting_array['settings'] ?? new settings(['database' => $setting_array['database'] ?? database::new()]);
+			$settings = new settings(['database' => $setting_array['database'] ?? database::new()]);
 			$this->key_file = $settings->get('cert_manager', 'key_file', '/etc/fusionpbx/cert_manager.key');
 		}
 	}

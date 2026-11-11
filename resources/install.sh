@@ -25,10 +25,14 @@
 # Norman King <norman@nsinnovations.net>
 #
 # Installs the certificate manager. Run it as root after cloning the app into
-# /var/www/fusionpbx/app/cert_manager. Running it again is harmless, and is how
-# an update of the nginx helper is installed.
+# /var/www/fusionpbx/app/cert_manager. Running it again is harmless.
+#
+# The nginx helper runs as root, so a copy of it that differs from the one
+# installed is only installed when asked for, after its changes are shown:
+# whoever can write the app directory could otherwise have root run anything.
 #
 #   sh /var/www/fusionpbx/app/cert_manager/resources/install.sh
+#   sh /var/www/fusionpbx/app/cert_manager/resources/install.sh --update-helper
 
 	set -e
 
@@ -62,19 +66,35 @@
 		echo "created /etc/fusionpbx/cert_manager.key; back it up with the database"
 	fi
 
-#the root helper that gives nginx its certificate, as a root owned copy
-	install -o root -g root -m 755 "$app/resources/scripts/deploy_nginx.sh" /usr/local/sbin/cert_manager_deploy_nginx
-	install -o root -g root -m 644 "$app/resources/service/debian/cert_manager_nginx.path" /etc/systemd/system/cert_manager_nginx.path
-	install -o root -g root -m 644 "$app/resources/service/debian/cert_manager_nginx.service" /etc/systemd/system/cert_manager_nginx.service
+#the root helper that gives nginx its certificate, as a root owned copy; a changed copy is shown, and installed only
+#with --update-helper
+	helper=/usr/local/sbin/cert_manager_deploy_nginx
+	if [ -f "$helper" ] && ! cmp -s "$app/resources/scripts/deploy_nginx.sh" "$helper"; then
+		if [ "$1" != "--update-helper" ]; then
+			diff -u "$helper" "$app/resources/scripts/deploy_nginx.sh" || true
+			echo "the nginx helper in the app differs from the one installed, shown above; it runs as root, so"
+			echo "read the changes, then run this again with --update-helper to install it"
+			exit 1
+		fi
+	fi
+	install -o root -g root -m 755 "$app/resources/scripts/deploy_nginx.sh" "$helper"
+	for unit in cert_manager_nginx.path cert_manager_nginx.service; do
+		if [ -f "/etc/systemd/system/$unit" ] && ! cmp -s "$app/resources/service/debian/$unit" "/etc/systemd/system/$unit" && [ "$1" != "--update-helper" ]; then
+			diff -u "/etc/systemd/system/$unit" "$app/resources/service/debian/$unit" || true
+			echo "the unit $unit differs from the one installed, shown above; run this again with --update-helper to install it"
+			exit 1
+		fi
+		install -o root -g root -m 644 "$app/resources/service/debian/$unit" "/etc/systemd/system/$unit"
+	done
 	systemctl daemon-reload
 	systemctl enable --now cert_manager_nginx.path
 
-#the schema, the menu, the permissions and the service of the app
-	chown -R www-data:www-data "$app"
+#the schema, the menu and the permissions of the app, as www-data, since these run the code of every app; only the
+#service, which writes the system's units, is updated as root
 	cd "$fusionpbx"
-	php core/upgrade/upgrade.php > /dev/null
-	php core/upgrade/upgrade.php --menu default > /dev/null
-	php core/upgrade/upgrade.php --group > /dev/null
+	runuser -u www-data -- php core/upgrade/upgrade.php > /dev/null
+	runuser -u www-data -- php core/upgrade/upgrade.php --menu default > /dev/null
+	runuser -u www-data -- php core/upgrade/upgrade.php --group > /dev/null
 	php core/upgrade/upgrade.php --service update > /dev/null
 
 	echo "installed; open Advanced > Certificates"

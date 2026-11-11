@@ -68,13 +68,19 @@
 		$acme_account_email = trim($_POST['acme_account_email'] ?? '');
 		$acme_account_eab_kid = trim($_POST['acme_account_eab_kid'] ?? '');
 		$acme_account_eab_hmac = trim($_POST['acme_account_eab_hmac'] ?? '');
-		$acme_account_enabled = $_POST['acme_account_enabled'] ?? 'false';
+		$acme_account_enabled = ($_POST['acme_account_enabled'] ?? '') == 'true' ? 'true' : 'false';
 		$acme_account_description = $_POST['acme_account_description'] ?? '';
 		$acme_account_agree = $_POST['acme_account_agree'] ?? '';
 	}
 
 //process the http post data
 	if (count($_POST) > 0 && empty($_POST["persistformvar"])) {
+
+		//the permission of the action is needed, add for a new one and edit for one that is there
+			if (($action == 'update' && !permission_exists('acme_account_edit')) || ($action == 'add' && !permission_exists('acme_account_add'))) {
+				echo "access denied";
+				exit;
+			}
 
 		//validate the token
 			$token = new token;
@@ -110,7 +116,8 @@
 				echo "<table><tr><td>\n";
 				echo $msg."<br />";
 				echo "</td></tr></table>\n";
-				persistformvar($_POST);
+				//the hmac key pasted is not written back into the page
+				persistformvar(array_diff_key($_POST, ['acme_account_eab_hmac' => true]));
 				echo "</div>\n";
 				require_once "resources/footer.php";
 				return;

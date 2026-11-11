@@ -27,6 +27,11 @@
 # Runs as root from cert_manager_nginx.service whenever the certificate manager
 # service, which runs as www-data, asks for nginx to use a new certificate.
 #
+# Everything in the directories the service writes is read and written as
+# www-data, never as root, as www-data owns them: a link or a special file
+# planted there then reaches nothing www-data could not already reach, and every
+# read is held to a size and a time.
+#
 # It first checks that nginx reads its certificate from the paths it manages.
 # When it does not, as after the installer's letsencrypt.sh, the certificate
 # lines of the FusionPBX site are pointed back at those paths, keeping the file
@@ -49,16 +54,22 @@
 	nginx_key=/etc/ssl/private/nginx.key
 	site=/etc/nginx/sites-available/fusionpbx
 
-#read the serial number the service asked for
-	serial=$(head -c 128 "$deploy/nginx.request" 2>/dev/null | tr -cd 'a-f0-9')
+#run a command as www-data, held to a time, for everything in the directories the service writes
+	as_service() {
+		timeout 20 runuser -u www-data -- "$@"
+	}
 
-#write the result for the service, through a new file so a link planted at the name is replaced, not followed
+#read a file the service wrote, as www-data, held to a size
+	read_service_file() {
+		as_service head -c "$2" -- "$1"
+	}
+
+#read the serial number the service asked for
+	serial=$(read_service_file "$deploy/nginx.request" 128 2>/dev/null | tr -cd 'a-f0-9')
+
+#write the result for the service, as www-data, through a new file moved over the old one
 	write_result() {
-		tmp=$(mktemp "$deploy/.nginx.result.XXXXXX") || exit 1
-		printf '%s %s %s\n' "$1" "$serial" "$2" > "$tmp"
-		chown www-data:www-data "$tmp"
-		chmod 644 "$tmp"
-		mv -f "$tmp" "$deploy/nginx.result"
+		printf '%s %s %s\n' "$1" "$serial" "$2" | as_service sh -c 'umask 022; tmp=$(mktemp "$1/.nginx.result.XXXXXX") && cat > "$tmp" && mv -f "$tmp" "$1/nginx.result"' sh "$deploy"
 	}
 
 #list the certificate and key paths in the nginx configuration files, without comments or quotes
@@ -89,18 +100,31 @@ ssl_certificate_key $ssl/nginx.key"
 		rewrite=true
 	fi
 
-#copy the files into the root owned directory under new names
+#copy the files into the root owned directory under new names, read as www-data and held to a size
 	umask 077
+	if [ -L "$ssl" ]; then
+		write_result failed "$ssl is a link"
+		exit 1
+	fi
 	mkdir -p "$ssl"
 	chmod 755 "$ssl"
-	cat "$live/fullchain.pem" > "$ssl/nginx.crt.new" 2>/dev/null || { write_result failed "the certificate could not be read"; exit 1; }
-	cat "$live/privkey.pem" > "$ssl/nginx.key.new" 2>/dev/null || { write_result failed "the key could not be read"; exit 1; }
+	if ! read_service_file "$live/fullchain.pem" 1048576 > "$ssl/nginx.crt.new" 2>/dev/null || [ ! -s "$ssl/nginx.crt.new" ]; then
+		rm -f "$ssl/nginx.crt.new"
+		write_result failed "the certificate could not be read"
+		exit 1
+	fi
+	if ! read_service_file "$live/privkey.pem" 65536 > "$ssl/nginx.key.new" 2>/dev/null || [ ! -s "$ssl/nginx.key.new" ]; then
+		rm -f "$ssl/nginx.crt.new" "$ssl/nginx.key.new"
+		write_result failed "the key could not be read"
+		exit 1
+	fi
 	chmod 644 "$ssl/nginx.crt.new"
 	chmod 600 "$ssl/nginx.key.new"
 
-#check the copies are a certificate and the key that belongs to it
-	crt_pub=$(openssl x509 -in "$ssl/nginx.crt.new" -noout -pubkey 2>/dev/null | openssl sha256)
-	key_pub=$(openssl pkey -in "$ssl/nginx.key.new" -pubout 2>/dev/null | openssl sha256)
+#check the copies are a certificate and the key that belongs to it, by their public keys, each read on its own so a
+#file that is not one gives nothing rather than the output of a later command
+	crt_pub=$(openssl x509 -in "$ssl/nginx.crt.new" -noout -pubkey 2>/dev/null) || crt_pub=
+	key_pub=$(openssl pkey -in "$ssl/nginx.key.new" -pubout 2>/dev/null) || key_pub=
 	if [ -z "$crt_pub" ] || [ "$crt_pub" != "$key_pub" ]; then
 		rm -f "$ssl/nginx.crt.new" "$ssl/nginx.key.new"
 		write_result failed "the key does not belong to the certificate"
@@ -135,7 +159,8 @@ ssl_certificate_key $ssl/nginx.key"
 		fi
 	done
 
-#put everything back as it was
+#put everything back as it was; the first time there is nothing before, so the links go back and the files nginx did
+#not accept are removed, rather than kept to be taken as the files before on the next run
 	put_back() {
 		if [ -f "$ssl/nginx.crt.prev" ]; then
 			mv -f "$ssl/nginx.crt.prev" "$ssl/nginx.crt"
@@ -144,6 +169,7 @@ ssl_certificate_key $ssl/nginx.key"
 			for link in "$nginx_crt" "$nginx_key"; do
 				[ -e "$link.cert_manager.bak" ] || [ -L "$link.cert_manager.bak" ] && mv -f "$link.cert_manager.bak" "$link"
 			done
+			rm -f "$ssl/nginx.crt" "$ssl/nginx.key"
 		fi
 		if [ -n "$rewrite" ]; then
 			cp -p "$ssl/fusionpbx.prev" "$site"
@@ -163,7 +189,11 @@ ssl_certificate_key $ssl/nginx.key"
 
 #reload nginx, or put everything back when it does not accept the certificate
 	if output=$(nginx -t 2>&1); then
-		systemctl reload nginx
+		if ! reload=$(systemctl reload nginx 2>&1); then
+			rm -f "$ssl/fusionpbx.prev"
+			write_result failed "nginx accepted the certificate but did not reload: $(printf '%s' "$reload" | tr -d '\n' | cut -c1-200)"
+			exit 1
+		fi
 		if [ -n "$rewrite" ]; then
 			rm -f "$ssl/fusionpbx.prev"
 			write_result ok "nginx reloaded; $site now reads $nginx_crt and $nginx_key, and was kept as it was in $site.cert_manager.bak${other:+, but some server blocks still read $other}"
