@@ -94,7 +94,7 @@
 	$sql = "select count(certificate_uuid) from v_certificates ";
 	$sql .= "where true ";
 	if (!empty($search)) {
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "lower(certificate_name) like :search ";
 		$sql .= "or lower(certificate_domains) like :search ";
 		$sql .= "or lower(certificate_issuer) like :search ";
@@ -120,7 +120,7 @@
 	$sql .= "from v_certificates ";
 	$sql .= "where true ";
 	if (!empty($search)) {
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "lower(certificate_name) like :search ";
 		$sql .= "or lower(certificate_domains) like :search ";
 		$sql .= "or lower(certificate_issuer) like :search ";

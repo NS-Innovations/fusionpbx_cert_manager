@@ -167,7 +167,7 @@ abstract class dns_provider {
 		curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 		$body = curl_exec($ch);
 		if ($body === false) {
-			throw new Exception('the API of the DNS provider could not be reached: ' . curl_error($ch));
+			throw new cert_manager_transient_exception('the API of the DNS provider could not be reached: ' . curl_error($ch));
 		}
 		$status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 		$decoded = json_decode((string) $body, true);

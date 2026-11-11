@@ -114,6 +114,12 @@
 			exit;
 		}
 		try {
+			//only a deployment of this certificate
+			$sql = "select count(*) from v_certificate_deployments where certificate_deployment_uuid = :uuid and certificate_uuid = :certificate_uuid ";
+			if ((int) $database->select($sql, ['uuid' => $_POST['restart_deployment'], 'certificate_uuid' => $certificate_uuid], 'column') !== 1) {
+				throw new Exception('the deployment is not one of this certificate');
+			}
+			unset($sql);
 			$deployer = new certificate_deployer(['database' => $database, 'settings' => $settings]);
 			message::add(escape($deployer->restart_freeswitch($_POST['restart_deployment'])));
 		}
@@ -144,7 +150,8 @@
 		//get the saved certificate, to know whether it has to be ordered again
 			$saved = [];
 			if ($action == 'update') {
-				$sql = "select certificate_source, certificate_domains, certificate_key_type, certificate_private_key, certificate_serial, certificate_warned from v_certificates ";
+				$sql = "select certificate_source, certificate_domains, certificate_key_type, certificate_private_key, certificate_serial, certificate_warned, ";
+				$sql .= "acme_account_uuid, certificate_challenge, dns_provider_uuid from v_certificates ";
 				$sql .= "where certificate_uuid = :certificate_uuid ";
 				$parameters['certificate_uuid'] = $certificate_uuid;
 				$saved = $database->select($sql, $parameters, 'row') ?: [];
@@ -216,7 +223,13 @@
 				if (($row['deployment_target'] ?? '') == 'identity' && $certificate_source != 'import') {
 					$msg .= $text['message-deployment_identity_import']."<br>\n";
 				}
-				if (($row['deployment_target'] ?? '') == 'nginx' && ($row['deployment_enabled'] ?? '') != 'false') {
+				$deleting = false;
+				foreach (is_array($certificate_deployments_delete) ? $certificate_deployments_delete : [] as $delete) {
+					if (is_array($delete) && ($delete['checked'] ?? '') == 'true' && ($delete['uuid'] ?? '') === ($row['certificate_deployment_uuid'] ?? null)) {
+						$deleting = true;
+					}
+				}
+				if (($row['deployment_target'] ?? '') == 'nginx' && ($row['deployment_enabled'] ?? '') != 'false' && !$deleting) {
 					$nginx_deployments++;
 				}
 			}
@@ -270,13 +283,22 @@
 				$array['certificates'][0]['certificate_renew_days'] = $certificate_renew_days !== '' ? (int) $certificate_renew_days : null;
 
 				//order a new certificate, or a renewal when the names or the key type change or one was asked for
-				$names_changed = !empty($saved) && certificates::split_domains($saved['certificate_domains']) != $domains;
+				$saved_domains = certificates::split_domains($saved['certificate_domains'] ?? '');
+				$posted_domains = $domains;
+				sort($saved_domains);
+				sort($posted_domains);
+				$names_changed = !empty($saved) && $saved_domains != $posted_domains;
 				$key_changed = !empty($saved) && $saved['certificate_key_type'] != $certificate_key_type;
 				if ($action == 'add') {
 					$array['certificates'][0]['certificate_status'] = 'pending';
 				}
-				//an order in progress for the old names or key type is let go of, as its finalize would be refused
-				$abandon_order = $names_changed || $key_changed;
+				//an order in progress for the old names, key type, account, challenge or provider is let go of, as it can
+				//not be completed with the new ones, and what it published is removed with the old provider
+				$abandon_order = $names_changed || $key_changed || (!empty($saved) && (
+					(string) $saved['acme_account_uuid'] !== (string) $acme_account_uuid
+					|| (string) $saved['certificate_challenge'] !== (string) $certificate_challenge
+					|| (string) $saved['dns_provider_uuid'] !== (string) ($certificate_challenge == 'dns-01' ? $dns_provider_uuid : '')
+				));
 				if ($action == 'add' || $names_changed || $key_changed || ($certificate_renew_now && permission_exists('certificate_renew'))) {
 					$array['certificates'][0]['certificate_renew'] = 'true';
 					$array['certificates'][0]['certificate_attempts'] = 0;

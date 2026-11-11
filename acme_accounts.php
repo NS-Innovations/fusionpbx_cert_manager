@@ -90,7 +90,7 @@
 	$sql = "select count(acme_account_uuid) from v_acme_accounts ";
 	$sql .= "where true ";
 	if (!empty($search)) {
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "lower(acme_account_name) like :search ";
 		$sql .= "or lower(acme_account_email) like :search ";
 		$sql .= "or lower(acme_account_description) like :search ";
@@ -113,7 +113,7 @@
 	$sql .= "from v_acme_accounts ";
 	$sql .= "where true ";
 	if (!empty($search)) {
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "lower(acme_account_name) like :search ";
 		$sql .= "or lower(acme_account_email) like :search ";
 		$sql .= "or lower(acme_account_description) like :search ";

@@ -189,7 +189,7 @@ class acme_client {
 		}
 		$response = $this->post($url, $payload, true);
 		if (!in_array($response['status'], [200, 201]) || empty($response['headers']['location'])) {
-			throw new Exception($this->problem($response, 'the account could not be registered'));
+			throw $this->problem_exception($response, 'the account could not be registered');
 		}
 		$this->account_url = $response['headers']['location'];
 		return ['url' => $this->account_url, 'status' => $response['json']['status'] ?? 'valid'];
@@ -206,7 +206,7 @@ class acme_client {
 	public function update_contact(string $email): string {
 		$response = $this->post($this->account_url, ['contact' => $email !== '' ? ['mailto:' . $email] : []]);
 		if ($response['status'] != 200) {
-			throw new Exception($this->problem($response, 'the contact of the account could not be changed'));
+			throw $this->problem_exception($response, 'the contact of the account could not be changed');
 		}
 		return $response['json']['status'] ?? 'valid';
 	}
@@ -226,7 +226,7 @@ class acme_client {
 		}
 		$response = $this->post($this->directory()['newOrder'], ['identifiers' => $identifiers]);
 		if ($response['status'] != 201 || !is_array($response['json']) || empty($response['headers']['location'])) {
-			throw new Exception($this->problem($response, 'the order could not be created'));
+			throw $this->problem_exception($response, 'the order could not be created');
 		}
 		return array_merge($response['json'], ['url' => $response['headers']['location']]);
 	}
@@ -242,7 +242,7 @@ class acme_client {
 	public function get(string $url): array {
 		$response = $this->post($url, null);
 		if ($response['status'] != 200 || !is_array($response['json'])) {
-			throw new Exception($this->problem($response, 'the ACME object could not be fetched'));
+			throw $this->problem_exception($response, 'the ACME object could not be fetched');
 		}
 		return $response['json'];
 	}
@@ -258,7 +258,7 @@ class acme_client {
 	public function respond(string $url): array {
 		$response = $this->post($url, []);
 		if ($response['status'] != 200 || !is_array($response['json'])) {
-			throw new Exception($this->problem($response, 'the challenge could not be answered'));
+			throw $this->problem_exception($response, 'the challenge could not be answered');
 		}
 		return $response['json'];
 	}
@@ -276,7 +276,7 @@ class acme_client {
 		$der = base64_decode(preg_replace('/-----[^-]+-----|\s+/', '', $csr));
 		$response = $this->post($url, ['csr' => self::base64url($der)]);
 		if ($response['status'] != 200 || !is_array($response['json'])) {
-			throw new Exception($this->problem($response, 'the order could not be finalized'));
+			throw $this->problem_exception($response, 'the order could not be finalized');
 		}
 		return $response['json'];
 	}
@@ -292,7 +292,7 @@ class acme_client {
 	public function download(string $url): string {
 		$response = $this->post($url, null, false, 'application/pem-certificate-chain');
 		if ($response['status'] != 200 || strpos($response['body'], '-----BEGIN CERTIFICATE-----') === false) {
-			throw new Exception($this->problem($response, 'the certificate could not be downloaded'));
+			throw $this->problem_exception($response, 'the certificate could not be downloaded');
 		}
 		return $response['body'];
 	}
@@ -397,12 +397,29 @@ class acme_client {
 	}
 
 	/**
-	 * Builds the problem message of a failed response.
+	 * Builds the exception of a failed response: a passing one for a server error, which an order in progress is
+	 * taken up again after, and a plain one for anything else.
 	 *
 	 * @param array  $response The response.
 	 * @param string $default  The message when the authority gave none.
 	 *
-	 * @return string
+	 * @return Exception
+	 */
+	protected function problem_exception(array $response, string $default): Exception {
+		$type = str_replace('urn:ietf:params:acme:error:', '', (string) ($response['json']['type'] ?? ''));
+		if ((int) $response['status'] >= 500 || $type == 'serverInternal') {
+			return new cert_manager_transient_exception($this->problem($response, $default));
+		}
+		return new Exception($this->problem($response, $default));
+	}
+
+	/**
+	 * Describes the problem document of a reply.
+	 *
+	 * @param array  $response The reply.
+	 * @param string $default  What to say when the reply has no problem document.
+	 *
+	 * @return string The description.
 	 */
 	protected function problem(array $response, string $default): string {
 		$json = $response['json'];
@@ -620,7 +637,7 @@ class acme_client {
 		$response_body = curl_exec($ch);
 		if ($response_body === false) {
 			$error = curl_error($ch);
-			throw new Exception('the certificate authority could not be reached: ' . $error);
+			throw new cert_manager_transient_exception('the certificate authority could not be reached: ' . $error);
 		}
 		$status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
 		if (!empty($headers['replay-nonce'])) {

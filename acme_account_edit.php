@@ -155,6 +155,15 @@
 				$array['acme_accounts'][0]['acme_account_status'] = null;
 			}
 
+		//the orders in progress with the old authority can not be completed with the new one, so they are let go of
+			if (!empty($saved['acme_account_directory']) && $saved['acme_account_directory'] !== $acme_account_directory) {
+				$sql = "select certificate_uuid from v_certificates where acme_account_uuid = :acme_account_uuid and certificate_order is not null ";
+				foreach ($database->select($sql, ['acme_account_uuid' => $acme_account_uuid], 'all') ?: [] as $row) {
+					(new certificate_order(['database' => $database]))->abandon($row['certificate_uuid']);
+				}
+				unset($sql, $row);
+			}
+
 		//save the data
 			$database->save($array);
 			unset($array);

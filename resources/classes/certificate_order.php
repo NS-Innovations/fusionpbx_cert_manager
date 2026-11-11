@@ -44,6 +44,13 @@
 class certificate_order {
 
 	/**
+	 * The passing errors in a row an order in progress is kept through, about an hour at the default interval
+	 *
+	 * @var int
+	 */
+	const transient_limit = 60;
+
+	/**
 	 * declare constant variables
 	 */
 	const app_name = 'cert_manager';
@@ -150,6 +157,10 @@ class certificate_order {
 				throw new Exception('the order expired before it was completed');
 			}
 
+			//the passing errors in a row, cleared by a step that goes through
+			$transient = (int) ($this->state['transient'] ?? 0);
+			unset($this->state['transient']);
+
 			//take the step the order is at
 			switch ($this->state['stage'] ?? '') {
 				case '':
@@ -174,8 +185,16 @@ class certificate_order {
 			return $this->state['stage'] == 'done' ? 'valid' : $this->status();
 		}
 		catch (Throwable $e) {
-			//an error, such as a reply of the authority missing a value, fails the order as an exception does, so it is
-			//not taken up again on every pass
+			//a passing error, such as an authority that could not be reached, keeps an order that was placed, for about an
+			//hour of passes at most, so a network hiccup costs neither the order nor a certificate already issued
+			if ($e instanceof cert_manager_transient_exception && !empty($this->state['stage']) && ($transient ?? 0) < self::transient_limit) {
+				$this->state['transient'] = ($transient ?? 0) + 1;
+				$this->save_state($this->status());
+				$this->log('warning', $e->getMessage() . '; tried again on the next pass');
+				return $this->status();
+			}
+			//any other error, such as a reply of the authority missing a value, fails the order, so it is not taken up
+			//again on every pass
 			$this->fail($e->getMessage());
 			return 'failed';
 		}

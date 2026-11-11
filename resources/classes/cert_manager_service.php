@@ -171,10 +171,10 @@ class cert_manager_service extends service {
 		$sql .= "where c.certificate_source = 'acme' ";
 		$sql .= "and c.certificate_enabled = true ";
 		$sql .= "and a.acme_account_enabled = true ";
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "	c.certificate_order is not null ";
 		$sql .= "	or c.certificate_renew = true ";
-		$sql .= "	or (";
+		$sql .= "	or ( ";
 		$sql .= "		(c.certificate_not_after is null or c.certificate_not_after < now() + least(make_interval(days => coalesce(c.certificate_renew_days, :renew_days)::int), (c.certificate_not_after - c.certificate_not_before) / 2)) ";
 		$sql .= "		and (c.certificate_next_attempt is null or c.certificate_next_attempt <= now()) ";
 		$sql .= "	) ";

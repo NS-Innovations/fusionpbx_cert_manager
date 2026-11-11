@@ -102,7 +102,13 @@
 				$row = $database->select($sql, $parameters, 'row');
 				unset($sql, $parameters);
 				if (is_array($row) && ($row['dns_provider_type'] ?? '') === $dns_provider_type) {
-					$saved_values = dns_providers::decode_settings($row['dns_provider_settings'], $crypto);
+					//settings sealed with another key, such as after a restore on another host, read as none
+					try {
+						$saved_values = dns_providers::decode_settings($row['dns_provider_settings'], $crypto);
+					}
+					catch (Exception $e) {
+						$saved_values = [];
+					}
 				}
 				unset($row);
 			}
@@ -139,7 +145,8 @@
 				echo "<table><tr><td>\n";
 				echo $msg."<br />";
 				echo "</td></tr></table>\n";
-				persistformvar($_POST);
+				//the settings typed, which hold the API token, are not written back into the page
+				persistformvar(array_diff_key($_POST, ['dns_provider_settings' => true]));
 				echo "</div>\n";
 				require_once "resources/footer.php";
 				return;

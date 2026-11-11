@@ -90,7 +90,7 @@
 	$sql = "select count(dns_provider_uuid) from v_dns_providers ";
 	$sql .= "where true ";
 	if (!empty($search)) {
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "lower(dns_provider_name) like :search ";
 		$sql .= "or lower(dns_provider_type) like :search ";
 		$sql .= "or lower(dns_provider_description) like :search ";
@@ -113,7 +113,7 @@
 	$sql .= "from v_dns_providers ";
 	$sql .= "where true ";
 	if (!empty($search)) {
-		$sql .= "and (";
+		$sql .= "and ( ";
 		$sql .= "lower(dns_provider_name) like :search ";
 		$sql .= "or lower(dns_provider_type) like :search ";
 		$sql .= "or lower(dns_provider_description) like :search ";
