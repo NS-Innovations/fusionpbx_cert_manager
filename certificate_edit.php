@@ -207,6 +207,33 @@
 					$details = cert_manager_pem::details($imported[0]);
 				}
 			}
+		//a STIR/SHAKEN certificate is imported, and nginx is given one certificate, so one deployment to it is enabled
+			$nginx_deployments = 0;
+			foreach (is_array($certificate_deployments) ? $certificate_deployments : [] as $row) {
+				if (!is_array($row)) {
+					continue;
+				}
+				if (($row['deployment_target'] ?? '') == 'identity' && $certificate_source != 'import') {
+					$msg .= $text['message-deployment_identity_import']."<br>\n";
+				}
+				if (($row['deployment_target'] ?? '') == 'nginx' && ($row['deployment_enabled'] ?? '') != 'false') {
+					$nginx_deployments++;
+				}
+			}
+			if ($nginx_deployments > 0) {
+				$sql = "select count(*) from v_certificate_deployments as d ";
+				$sql .= "join v_certificates as c on c.certificate_uuid = d.certificate_uuid ";
+				$sql .= "where d.deployment_target = 'nginx' ";
+				$sql .= "and d.deployment_enabled = true ";
+				$sql .= "and c.certificate_enabled = true ";
+				$sql .= "and d.certificate_uuid <> :certificate_uuid ";
+				$nginx_deployments += (int) $database->select($sql, ['certificate_uuid' => is_uuid($certificate_uuid ?? '') ? $certificate_uuid : '00000000-0000-0000-0000-000000000000'], 'column');
+				unset($sql);
+			}
+			if ($nginx_deployments > 1) {
+				$msg .= $text['message-deployment_nginx_one']."<br>\n";
+			}
+
 			if (!empty($msg) && empty($_POST["persistformvar"])) {
 				require_once "resources/header.php";
 				require_once "resources/persist_form_var.php";

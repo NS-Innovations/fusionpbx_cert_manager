@@ -28,11 +28,14 @@
 # /var/www/fusionpbx/app/cert_manager. Running it again is harmless.
 #
 # The nginx helper runs as root, so a copy of it that differs from the one
-# installed is only installed when asked for, after its changes are shown:
-# whoever can write the app directory could otherwise have root run anything.
+# installed, such as after a git pull, is only installed when asked for, after
+# its changes are shown, and the copy installed is the one whose changes were
+# shown. This makes an update of what root runs a step somebody takes on
+# purpose; it is no defence against somebody who can already change the files
+# of the app, including this script, before root runs it.
 #
 #   sh /var/www/fusionpbx/app/cert_manager/resources/install.sh
-#   sh /var/www/fusionpbx/app/cert_manager/resources/install.sh --update-helper
+#   sh /var/www/fusionpbx/app/cert_manager/resources/install.sh --update-helper=<the sum it prints>
 
 	set -e
 
@@ -69,22 +72,33 @@
 #the root helper that gives nginx its certificate, as a root owned copy; a changed copy is shown, and installed only
 #with --update-helper
 	helper=/usr/local/sbin/cert_manager_deploy_nginx
-	if [ -f "$helper" ] && ! cmp -s "$app/resources/scripts/deploy_nginx.sh" "$helper"; then
-		if [ "$1" != "--update-helper" ]; then
-			diff -u "$helper" "$app/resources/scripts/deploy_nginx.sh" || true
-			echo "the nginx helper in the app differs from the one installed, shown above; it runs as root, so"
-			echo "read the changes, then run this again with --update-helper to install it"
-			exit 1
-		fi
+	staged=$(mktemp -d)
+	trap 'rm -rf "$staged"' EXIT
+	cp "$app/resources/scripts/deploy_nginx.sh" "$staged/deploy_nginx.sh"
+	cp "$app/resources/service/debian/cert_manager_nginx.path" "$app/resources/service/debian/cert_manager_nginx.service" "$staged/"
+	sum=$(cat "$staged/deploy_nginx.sh" "$staged/cert_manager_nginx.path" "$staged/cert_manager_nginx.service" | sha256sum | cut -c1-16)
+	changed=
+	if [ -f "$helper" ] && ! cmp -s "$staged/deploy_nginx.sh" "$helper"; then
+		changed=true
 	fi
-	install -o root -g root -m 755 "$app/resources/scripts/deploy_nginx.sh" "$helper"
 	for unit in cert_manager_nginx.path cert_manager_nginx.service; do
-		if [ -f "/etc/systemd/system/$unit" ] && ! cmp -s "$app/resources/service/debian/$unit" "/etc/systemd/system/$unit" && [ "$1" != "--update-helper" ]; then
-			diff -u "/etc/systemd/system/$unit" "$app/resources/service/debian/$unit" || true
-			echo "the unit $unit differs from the one installed, shown above; run this again with --update-helper to install it"
-			exit 1
+		if [ -f "/etc/systemd/system/$unit" ] && ! cmp -s "$staged/$unit" "/etc/systemd/system/$unit"; then
+			changed=true
 		fi
-		install -o root -g root -m 644 "$app/resources/service/debian/$unit" "/etc/systemd/system/$unit"
+	done
+	if [ -n "$changed" ] && [ "$1" != "--update-helper=$sum" ]; then
+		[ -f "$helper" ] && diff -u "$helper" "$staged/deploy_nginx.sh" || true
+		for unit in cert_manager_nginx.path cert_manager_nginx.service; do
+			[ -f "/etc/systemd/system/$unit" ] && diff -u "/etc/systemd/system/$unit" "$staged/$unit" || true
+		done
+		echo "the nginx helper or its units differ from the ones installed, shown above; they run as root, so"
+		echo "read the changes, then install exactly these with:"
+		echo "  sh $0 --update-helper=$sum"
+		exit 1
+	fi
+	install -o root -g root -m 755 "$staged/deploy_nginx.sh" "$helper"
+	for unit in cert_manager_nginx.path cert_manager_nginx.service; do
+		install -o root -g root -m 644 "$staged/$unit" "/etc/systemd/system/$unit"
 	done
 	systemctl daemon-reload
 	systemctl enable --now cert_manager_nginx.path

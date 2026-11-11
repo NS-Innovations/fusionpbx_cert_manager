@@ -384,6 +384,12 @@ $text['modal_title-restart']['en-gb'] = "Restart SIP Profiles";
 $text['modal_message-restart']['en-us'] = "Restarting a SIP profile drops the calls on it, and its phones have to register again. Restart the profiles that use this certificate now?";
 $text['modal_message-restart']['en-gb'] = "Restarting a SIP profile drops the calls on it, and its phones have to register again. Restart the profiles that use this certificate now?";
 
+$text['message-deployment_identity_import']['en-us'] = "Only an imported certificate from an STI-CA can be used for STIR/SHAKEN";
+$text['message-deployment_identity_import']['en-gb'] = "Only an imported certificate from an STI-CA can be used for STIR/SHAKEN";
+
+$text['message-deployment_nginx_one']['en-us'] = "nginx serves one certificate, so only one certificate can have an enabled nginx deployment";
+$text['message-deployment_nginx_one']['en-gb'] = "nginx serves one certificate, so only one certificate can have an enabled nginx deployment";
+
 $text['message-deployment_restart_failed']['en-us'] = "The SIP profiles could not be restarted:";
 $text['message-deployment_restart_failed']['en-gb'] = "The SIP profiles could not be restarted:";
 

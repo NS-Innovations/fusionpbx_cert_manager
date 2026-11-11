@@ -74,11 +74,15 @@ The install script needs root. It:
    the `cert_manager` service.
 
 Running it again is harmless. After a `git pull` that changes the nginx helper or its units, it
-shows the changes and stops, as the helper runs as root; read them, then install them with:
+shows the changes and stops, as the helper runs as root. Read them, then install exactly the copy
+that was shown with the sum it prints:
 
 ```sh
-sh /var/www/fusionpbx/app/cert_manager/resources/install.sh --update-helper
+sh /var/www/fusionpbx/app/cert_manager/resources/install.sh --update-helper=<sum>
 ```
+
+This makes updating what root runs a step taken on purpose. It is no defence against somebody who
+can already change the files of the app, this script included, before root runs it.
 
 **Back up `/etc/fusionpbx/cert_manager.key` along with the database.** Without it the stored keys
 and credentials cannot be decrypted.

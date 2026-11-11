@@ -305,7 +305,7 @@
 		echo "<td class='vncellreq' valign='top' align='left' nowrap='nowrap'>".$text['label-acme_account_agree']."</td>\n";
 		echo "<td class='vtable' align='left'>\n";
 		echo "	<label><input type='checkbox' name='acme_account_agree' value='true'> ".$text['option-acme_account_agree']."</label>\n";
-		if (!empty($terms_of_service)) {
+		if (!empty($terms_of_service) && preg_match('#^https://#i', $terms_of_service)) {
 			echo "	<a href='".escape($terms_of_service)."' target='_blank' rel='noopener noreferrer'>".$text['label-acme_account_terms']."</a>\n";
 		}
 		echo "	<br />\n";

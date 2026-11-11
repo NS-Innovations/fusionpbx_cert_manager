@@ -384,6 +384,16 @@ class certificate_order {
 	 * @throws Exception When an authorization fails or the order cannot be finalized.
 	 */
 	private function check(): void {
+		//an order the authority is already issuing, as when the service stopped after finalizing and before saving
+		//that it had, is collected rather than finalized again, which the authority would refuse
+		$order = $this->client->get($this->state['url']);
+		if (in_array($order['status'] ?? '', ['processing', 'valid'], true)) {
+			$this->state['stage'] = 'finalized';
+			$this->save_state('ordering');
+			$this->collect();
+			return;
+		}
+
 		$deadline = time() + self::poll_seconds;
 		do {
 			$pending = false;
@@ -395,6 +405,10 @@ class certificate_order {
 				$this->state['authorizations'][$index]['status'] = $authorization['status'];
 				if ($authorization['status'] == 'invalid') {
 					throw new Exception('validation of ' . $entry['domain'] . ' failed: ' . $this->challenge_error($authorization));
+				}
+				//an authorization that ended without being valid never will be
+				if (in_array($authorization['status'], ['deactivated', 'expired', 'revoked'], true)) {
+					throw new Exception('the authorization of ' . $entry['domain'] . ' is ' . $authorization['status']);
 				}
 				if ($authorization['status'] != 'valid') {
 					$pending = true;
@@ -449,10 +463,7 @@ class certificate_order {
 		}
 		$details = cert_manager_pem::details($chain[0]);
 
-		//remove what was published
-		$this->clean_up();
-
-		//save the certificate
+		//save the certificate first, so a record that can not be removed afterwards never costs the certificate
 		$array['certificates'][0]['certificate_uuid'] = $this->certificate['certificate_uuid'];
 		$array['certificates'][0]['certificate_private_key'] = $this->state['key'];
 		$array['certificates'][0]['certificate_pem'] = $chain[0];
@@ -471,6 +482,14 @@ class certificate_order {
 		$this->save($array, 'certificate_edit');
 		$this->state['stage'] = 'done';
 		$this->log('info', 'certificate issued by ' . $details['issuer'] . ', serial ' . $details['serial'] . ', valid until ' . $details['not_after']);
+
+		//then remove what was published, as well as it can be
+		try {
+			$this->clean_up();
+		}
+		catch (Throwable $e) {
+			$this->log('warning', 'clean up failed: ' . $e->getMessage());
+		}
 	}
 
 	/**
@@ -487,7 +506,7 @@ class certificate_order {
 		try {
 			$this->clean_up();
 		}
-		catch (Exception $e) {
+		catch (Throwable $e) {
 			$this->log('warning', 'clean up failed: ' . $e->getMessage());
 		}
 		$attempts = (int) ($this->certificate['certificate_attempts'] ?? 0) + 1;

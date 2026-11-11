@@ -99,7 +99,7 @@ class certificate_deployer {
 		$results = $this->check_nginx();
 
 		$sql = "select d.certificate_deployment_uuid, d.deployment_target, d.deployment_options, ";
-		$sql .= "c.certificate_uuid, c.certificate_name, c.certificate_serial, c.certificate_pem, c.certificate_chain, c.certificate_private_key ";
+		$sql .= "c.certificate_uuid, c.certificate_name, c.certificate_source, c.certificate_serial, c.certificate_pem, c.certificate_chain, c.certificate_private_key ";
 		$sql .= "from v_certificate_deployments as d ";
 		$sql .= "join v_certificates as c on c.certificate_uuid = d.certificate_uuid ";
 		$sql .= "where d.deployment_enabled = true ";
@@ -141,6 +141,11 @@ class certificate_deployer {
 					[$status, $message] = $this->deploy_freeswitch($certificate, $chain, $private_key);
 					break;
 				case 'identity':
+					//a STIR/SHAKEN certificate comes from an STI-CA and is imported; one ordered for TLS would sign
+					//every call with a certificate the carriers do not accept
+					if (($row['certificate_source'] ?? '') != 'import') {
+						throw new Exception('only an imported certificate can be used for STIR/SHAKEN');
+					}
 					[$status, $message] = $this->deploy_identity($certificate, $chain, $private_key);
 					break;
 				default:
@@ -149,7 +154,9 @@ class certificate_deployer {
 			$array['certificate_deployments'][0]['deployment_serial'] = $row['certificate_serial'];
 			$array['certificate_deployments'][0]['deployment_date'] = 'now()';
 		}
-		catch (Exception $e) {
+		catch (Throwable $e) {
+			//an error, such as from a stored value a built in function refuses, fails the deployment as an exception
+			//does, rather than stopping the deployments after it
 			$status = 'failed';
 			$message = $e->getMessage();
 		}

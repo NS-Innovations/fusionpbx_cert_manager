@@ -132,7 +132,12 @@ class cert_manager_service extends service {
 				sleep(1);
 			}
 
-			//the service can be turned off without stopping it
+			//the service can be turned off without stopping it, and its settings are read on every pass so a change in
+			//the default settings takes effect without a restart
+			$this->settings = new settings(['database' => $this->database]);
+			$this->enabled = $this->settings->get('cert_manager', 'enabled', true);
+			$this->renew_days = (int) $this->settings->get('cert_manager', 'renew_days', 30);
+			$this->log_retention_days = (int) $this->settings->get('cert_manager', 'log_retention_days', 90);
 			if ($this->enabled) {
 				//each part runs on its own, so one that fails does not keep the others from running
 				foreach (['order_certificates', 'deploy_certificates', 'warn_expiring', 'trim_log'] as $part) {
