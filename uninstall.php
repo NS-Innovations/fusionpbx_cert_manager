@@ -177,6 +177,13 @@
 		echo "  removed ".@sizeof($permission_names)." group permissions\n";
 	}
 
+//remove the permissions the upgrade listed for this app
+	$sql = "delete from v_permissions where application_uuid = :app_uuid ";
+	$parameters['app_uuid'] = $app_uuid;
+	$database->execute($sql, $parameters);
+	unset($sql, $parameters);
+	echo "  removed the permissions of the app\n";
+
 //remove the settings of this app, which carry its app uuid
 	foreach (['v_default_settings', 'v_domain_settings'] as $table) {
 		$sql = "delete from ".$table." where app_uuid = :app_uuid ";

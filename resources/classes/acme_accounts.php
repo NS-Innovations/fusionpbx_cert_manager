@@ -247,11 +247,16 @@ class acme_accounts {
 				}
 				$states = [];
 				if (is_array($uuids) && @sizeof($uuids) != 0) {
-					$sql = "select " . $this->uuid_prefix . "uuid as uuid, " . $this->toggle_field . " as toggle from v_" . $this->table . " ";
+					$sql = "select " . $this->uuid_prefix . "uuid as uuid, " . $this->toggle_field . " as toggle, acme_account_url from v_" . $this->table . " ";
 					$sql .= "where " . $this->uuid_prefix . "uuid in (" . implode(', ', $uuids) . ") ";
 					$rows = $this->database->select($sql, null, 'all');
 					if (is_array($rows) && @sizeof($rows) != 0) {
 						foreach ($rows as $row) {
+							//an account that is not registered is turned on from its page, where the terms are agreed to
+							if ($row['toggle'] != 'true' && empty($row['acme_account_url'])) {
+								message::add($text['message-acme_account_agree_required'], 'negative');
+								continue;
+							}
 							$states[$row['uuid']] = $row['toggle'];
 						}
 					}

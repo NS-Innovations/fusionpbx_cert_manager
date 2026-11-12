@@ -172,6 +172,9 @@
 				foreach (certificates::invalid_domains($domains) as $domain) {
 					$msg .= $text['message-certificate_domain_invalid']." ".escape($domain)."<br>\n";
 				}
+				if (!empty($domains) && empty(array_filter($domains, function ($domain) { return strlen($domain) <= 64; }))) {
+					$msg .= $text['message-certificate_domain_short']."<br>\n";
+				}
 				if (!is_uuid($acme_account_uuid)) { $msg .= $text['message-required']." ".$text['label-acme_account']."<br>\n"; }
 				if (!in_array($certificate_challenge, ['http-01', 'dns-01'], true)) { $msg .= $text['message-required']." ".$text['label-certificate_challenge']."<br>\n"; }
 				if ($certificate_challenge == 'http-01' && preg_grep('/^\*\./', $domains)) { $msg .= $text['message-certificate_wildcard_dns']."<br>\n"; }

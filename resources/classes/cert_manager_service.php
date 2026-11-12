@@ -86,6 +86,19 @@ class cert_manager_service extends service {
 	private $last_warning = 0;
 
 	/**
+	 * Reads the settings of the service from the default settings, on start, on a reload and on every pass.
+	 *
+	 * @return void
+	 */
+	private function refresh_settings(): void {
+		$this->settings = new settings(['database' => $this->database]);
+		$this->enabled = $this->settings->get('cert_manager', 'enabled', true);
+		$this->interval = (int) $this->settings->get('cert_manager', 'interval', 60);
+		$this->renew_days = (int) $this->settings->get('cert_manager', 'renew_days', 30);
+		$this->log_retention_days = (int) $this->settings->get('cert_manager', 'log_retention_days', 90);
+	}
+
+	/**
 	 * Reloads settings from the config file and the database.
 	 *
 	 * @return void
@@ -98,13 +111,7 @@ class cert_manager_service extends service {
 		$this->database = new database(['config' => parent::$config]);
 
 		//get the settings using the global defaults
-		$this->settings = new settings(['database' => $this->database]);
-
-		//get the service settings
-		$this->enabled = $this->settings->get('cert_manager', 'enabled', true);
-		$this->interval = (int) $this->settings->get('cert_manager', 'interval', 60);
-		$this->renew_days = (int) $this->settings->get('cert_manager', 'renew_days', 30);
-		$this->log_retention_days = (int) $this->settings->get('cert_manager', 'log_retention_days', 90);
+		$this->refresh_settings();
 
 		//keep the loop from spinning
 		if ($this->interval < 10) {
@@ -134,10 +141,7 @@ class cert_manager_service extends service {
 
 			//the service can be turned off without stopping it, and its settings are read on every pass so a change in
 			//the default settings takes effect without a restart
-			$this->settings = new settings(['database' => $this->database]);
-			$this->enabled = $this->settings->get('cert_manager', 'enabled', true);
-			$this->renew_days = (int) $this->settings->get('cert_manager', 'renew_days', 30);
-			$this->log_retention_days = (int) $this->settings->get('cert_manager', 'log_retention_days', 90);
+			$this->refresh_settings();
 			if ($this->enabled) {
 				//each part runs on its own, so one that fails does not keep the others from running
 				foreach (['order_certificates', 'deploy_certificates', 'warn_expiring', 'trim_log'] as $part) {

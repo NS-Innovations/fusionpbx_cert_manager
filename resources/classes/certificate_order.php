@@ -141,6 +141,11 @@ class certificate_order {
 		$this->state = json_decode((string) $this->certificate['certificate_order'], true) ?: [];
 		$this->provider = null;
 
+		//the passing errors in a row, cleared by a step that goes through, and the stage the step started at
+		$transient = (int) ($this->state['transient'] ?? 0);
+		unset($this->state['transient']);
+		$stage = $this->state['stage'] ?? '';
+
 		try {
 			//the account has to be usable
 			if (empty($this->certificate['acme_account_uuid'])) {
@@ -156,10 +161,6 @@ class certificate_order {
 			if (!empty($this->state['expires']) && $this->state['expires'] < time() && ($this->state['stage'] ?? '') != 'finalized') {
 				throw new Exception('the order expired before it was completed');
 			}
-
-			//the passing errors in a row, cleared by a step that goes through
-			$transient = (int) ($this->state['transient'] ?? 0);
-			unset($this->state['transient']);
 
 			//take the step the order is at
 			switch ($this->state['stage'] ?? '') {
@@ -185,10 +186,12 @@ class certificate_order {
 			return $this->state['stage'] == 'done' ? 'valid' : $this->status();
 		}
 		catch (Throwable $e) {
-			//a passing error, such as an authority that could not be reached, keeps an order that was placed, for about an
-			//hour of passes at most, so a network hiccup costs neither the order nor a certificate already issued
-			if ($e instanceof cert_manager_transient_exception && !empty($this->state['stage']) && ($transient ?? 0) < self::transient_limit) {
-				$this->state['transient'] = ($transient ?? 0) + 1;
+			//a passing error, such as an authority that could not be reached, keeps an order whose challenges are all
+			//published, for about an hour of passes at most, so a network hiccup costs neither the order nor a
+			//certificate already issued; one while the order is placed fails it, as placing it again on every pass would
+			//run into the limit of new orders of the authority
+			if ($e instanceof cert_manager_transient_exception && in_array($stage, ['published', 'responded', 'finalized'], true) && $transient < self::transient_limit) {
+				$this->state['transient'] = $transient + 1;
 				$this->save_state($this->status());
 				$this->log('warning', $e->getMessage() . '; tried again on the next pass');
 				return $this->status();
@@ -208,7 +211,7 @@ class certificate_order {
 	 * @return void
 	 */
 	public function abandon(string $certificate_uuid): void {
-		$sql = "select certificate_uuid, certificate_order, dns_provider_uuid from v_certificates where certificate_uuid = :certificate_uuid ";
+		$sql = "select certificate_uuid, certificate_order, dns_provider_uuid, certificate_pem from v_certificates where certificate_uuid = :certificate_uuid ";
 		$this->certificate = $this->database->select($sql, ['certificate_uuid' => $certificate_uuid], 'row') ?: [];
 		unset($sql);
 		if (empty($this->certificate) || empty($this->certificate['certificate_order'])) {
@@ -224,6 +227,7 @@ class certificate_order {
 		}
 		$array['certificates'][0]['certificate_uuid'] = $certificate_uuid;
 		$array['certificates'][0]['certificate_order'] = null;
+		$array['certificates'][0]['certificate_status'] = !empty($this->certificate['certificate_pem']) ? 'valid' : 'pending';
 		$this->save($array, 'certificate_edit');
 	}
 
@@ -350,9 +354,12 @@ class certificate_order {
 				return;
 			}
 		}
+		//each challenge answered is saved as answered, so one interrupted part way is not answered twice
 		foreach ($this->state['authorizations'] as $index => $entry) {
-			if ($entry['status'] != 'valid') {
+			if ($entry['status'] != 'valid' && empty($entry['responded'])) {
 				$this->client->respond($entry['challenge']);
+				$this->state['authorizations'][$index]['responded'] = true;
+				$this->save_state('ordering');
 			}
 		}
 		$this->state['stage'] = 'responded';

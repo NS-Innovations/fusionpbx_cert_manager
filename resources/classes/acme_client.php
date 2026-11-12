@@ -143,7 +143,12 @@ class acme_client {
 		if ($this->directory === null) {
 			$response = $this->http('GET', $this->directory_url);
 			if ($response['status'] != 200 || !is_array($response['json']) || empty($response['json']['newAccount'])) {
-				throw new Exception('the ACME directory ' . $this->directory_url . ' could not be read (HTTP ' . $response['status'] . ')');
+				//a server error, as during maintenance of the authority, passes
+				$message = 'the ACME directory ' . $this->directory_url . ' could not be read (HTTP ' . $response['status'] . ')';
+				if ((int) $response['status'] >= 500) {
+					throw new cert_manager_transient_exception($message);
+				}
+				throw new Exception($message);
 			}
 			$this->directory = $response['json'];
 		}
@@ -495,10 +500,11 @@ class acme_client {
 	 */
 	private function nonce(): string {
 		if ($this->nonce === '') {
-			$this->http('HEAD', $this->directory()['newNonce']);
+			$response = $this->http('HEAD', $this->directory()['newNonce']);
 		}
 		if ($this->nonce === '') {
-			throw new Exception('the certificate authority gave no nonce');
+			//an authority that answers without a nonce, as during maintenance, is taken up again on the next pass
+			throw new cert_manager_transient_exception('the certificate authority gave no nonce (HTTP ' . ($response['status'] ?? 0) . ')');
 		}
 		$nonce = $this->nonce;
 		$this->nonce = '';

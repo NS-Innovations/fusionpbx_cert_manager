@@ -99,6 +99,9 @@ $text['label-acme_account_terms']['en-gb'] = "Read the terms";
 $text['description-acme_account_agree']['en-us'] = "The certificate authority only registers an account whose owner agrees to its terms of service.";
 $text['description-acme_account_agree']['en-gb'] = "The certificate authority only registers an account whose owner agrees to its terms of service.";
 
+$text['message-certificate_domain_short']['en-us'] = "At least one name must be 64 characters or shorter, to be the subject of the certificate";
+$text['message-certificate_domain_short']['en-gb'] = "At least one name must be 64 characters or shorter, to be the subject of the certificate";
+
 $text['message-acme_account_agree_required']['en-us'] = "The terms of service of the certificate authority must be agreed to before the account can be registered.";
 $text['message-acme_account_agree_required']['en-gb'] = "The terms of service of the certificate authority must be agreed to before the account can be registered.";
 

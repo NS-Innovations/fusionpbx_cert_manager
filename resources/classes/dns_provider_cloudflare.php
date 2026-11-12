@@ -188,6 +188,10 @@ class dns_provider_cloudflare extends dns_provider {
 				}
 			}
 
+			//a server error or a rate limit passes
+			if ((int) $response['status'] >= 500 || (int) $response['status'] == 429) {
+				throw new cert_manager_transient_exception('Cloudflare: ' . $message, (int) ($error['code'] ?? 0));
+			}
 			throw new Exception('Cloudflare: ' . $message, (int) ($error['code'] ?? 0));
 		}
 		return $response['json'];
