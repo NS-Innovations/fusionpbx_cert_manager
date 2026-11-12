@@ -62,6 +62,12 @@
 
 //get posted data
 	if (count($_POST) > 0) {
+		//every value of the form is text, so a value posted as a list is dropped
+		foreach ($_POST as $name => $value) {
+			if (is_array($value)) {
+				$_POST[$name] = '';
+			}
+		}
 		$acme_account_name = $_POST['acme_account_name'] ?? '';
 		$acme_account_directory_preset = $_POST['acme_account_directory_preset'] ?? '';
 		$acme_account_directory = $acme_account_directory_preset !== '' ? $acme_account_directory_preset : trim($_POST['acme_account_directory'] ?? '');

@@ -394,7 +394,9 @@ $text['message-deployment_identity_import']['en-us'] = "Only an imported certifi
 $text['message-deployment_identity_import']['en-gb'] = "Only an imported certificate from an STI-CA can be used for STIR/SHAKEN";
 
 $text['message-deployment_nginx_one']['en-us'] = "nginx serves one certificate, so only one certificate can have an enabled nginx deployment";
+$text['message-deployment_target_one']['en-us'] = "Each target is given one certificate, so only one certificate can have an enabled deployment to:";
 $text['message-deployment_nginx_one']['en-gb'] = "nginx serves one certificate, so only one certificate can have an enabled nginx deployment";
+$text['message-deployment_target_one']['en-gb'] = "Each target is given one certificate, so only one certificate can have an enabled deployment to:";
 
 $text['message-deployment_restart_failed']['en-us'] = "The SIP profiles could not be restarted:";
 $text['message-deployment_restart_failed']['en-gb'] = "The SIP profiles could not be restarted:";

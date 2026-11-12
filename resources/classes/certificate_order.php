@@ -543,8 +543,14 @@ class certificate_order {
 		$this->save($array, 'certificate_edit');
 		$this->state['stage'] = 'done';
 
-		//the new certificate is deployed at once, also where the one before failed less than an hour ago
-		certificate_deployer::retry_failed($this->database, $this->certificate['certificate_uuid']);
+		//the new certificate is deployed at once, also where the one before failed less than an hour ago; what follows the
+		//save can not mark a certificate that was issued as failed
+		try {
+			certificate_deployer::retry_failed($this->database, $this->certificate['certificate_uuid']);
+		}
+		catch (Throwable $e) {
+			//the deployments are tried again on their own after an hour
+		}
 		$this->log('info', 'certificate issued by ' . $details['issuer'] . ', serial ' . $details['serial'] . ', valid until ' . $details['not_after']);
 
 		//then remove what was published, as well as it can be
@@ -727,7 +733,9 @@ class certificate_order {
 		//almost empty row
 		foreach ($array['certificates'] ?? [] as $row) {
 			$sql = "select count(*) from v_certificates where certificate_uuid = :certificate_uuid ";
-			if ((int) $this->database->select($sql, ['certificate_uuid' => $row['certificate_uuid'] ?? ''], 'column') !== 1) {
+			$exists = (int) $this->database->select($sql, ['certificate_uuid' => $row['certificate_uuid'] ?? ''], 'column') === 1;
+			unset($sql);
+			if (!$exists) {
 				return;
 			}
 		}

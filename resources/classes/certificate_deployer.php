@@ -182,10 +182,11 @@ class certificate_deployer {
 	private function record(array $row, string $status, string $message, array $array = []): void {
 		//a deployment deleted while it ran is not put back as an almost empty row
 		$sql = "select count(*) from v_certificate_deployments where certificate_deployment_uuid = :uuid ";
-		if ((int) $this->database->select($sql, ['uuid' => $row['certificate_deployment_uuid']], 'column') !== 1) {
+		$exists = (int) $this->database->select($sql, ['uuid' => $row['certificate_deployment_uuid']], 'column') === 1;
+		unset($sql);
+		if (!$exists) {
 			return;
 		}
-		unset($sql);
 		$array['certificate_deployments'][0]['certificate_deployment_uuid'] = $row['certificate_deployment_uuid'];
 		$array['certificate_deployments'][0]['deployment_status'] = $status;
 		$array['certificate_deployments'][0]['deployment_message'] = $message;
@@ -205,6 +206,39 @@ class certificate_deployer {
 		$this->database->save($array, false);
 		$p->delete('certificate_deployment_edit', 'temp');
 		$p->delete('certificate_log_add', 'temp');
+	}
+
+	/**
+	 * Deploys every enabled deployment of a certificate again, as when it is turned back on and another certificate may
+	 * have written its targets while it was off.
+	 *
+	 * @param database $database         The database.
+	 * @param string   $certificate_uuid The certificate.
+	 *
+	 * @return void
+	 */
+	public static function redeploy(database $database, string $certificate_uuid): void {
+		if (!is_uuid($certificate_uuid)) {
+			return;
+		}
+		$sql = "select certificate_deployment_uuid from v_certificate_deployments ";
+		$sql .= "where certificate_uuid = :certificate_uuid ";
+		$sql .= "and deployment_enabled = true ";
+		$rows = $database->select($sql, ['certificate_uuid' => $certificate_uuid], 'all');
+		unset($sql);
+		if (!is_array($rows) || @sizeof($rows) == 0) {
+			return;
+		}
+		foreach ($rows as $x => $row) {
+			$array['certificate_deployments'][$x]['certificate_deployment_uuid'] = $row['certificate_deployment_uuid'];
+			$array['certificate_deployments'][$x]['deployment_serial'] = null;
+			$array['certificate_deployments'][$x]['deployment_status'] = 'pending';
+			$array['certificate_deployments'][$x]['deployment_date'] = null;
+		}
+		$p = permissions::new();
+		$p->add('certificate_deployment_edit', 'temp');
+		$database->save($array, false);
+		$p->delete('certificate_deployment_edit', 'temp');
 	}
 
 	/**
@@ -284,6 +318,9 @@ class certificate_deployer {
 		unset($sql);
 
 		$results = [];
+		if (!is_array($rows) || @sizeof($rows) == 0) {
+			return $results;
+		}
 		$store = self::nginx_store;
 		$result = explode(' ', trim((string) @file_get_contents($store . '/deploy/nginx.result')), 3);
 		foreach ($rows ?: [] as $row) {

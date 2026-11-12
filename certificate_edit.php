@@ -157,7 +157,7 @@
 			$saved = [];
 			if ($action == 'update') {
 				$sql = "select certificate_source, certificate_domains, certificate_key_type, certificate_private_key, certificate_serial, certificate_warned, ";
-				$sql .= "acme_account_uuid, certificate_challenge, dns_provider_uuid from v_certificates ";
+				$sql .= "acme_account_uuid, certificate_challenge, dns_provider_uuid, cast(certificate_enabled as text) as certificate_enabled from v_certificates ";
 				$sql .= "where certificate_uuid = :certificate_uuid ";
 				$parameters['certificate_uuid'] = $certificate_uuid;
 				$saved = $database->select($sql, $parameters, 'row') ?: [];
@@ -237,8 +237,9 @@
 					$details = cert_manager_pem::details($imported[0]);
 				}
 			}
-		//a STIR/SHAKEN certificate is imported, and nginx is given one certificate, so one deployment to it is enabled
-			$nginx_deployments = 0;
+		//a STIR/SHAKEN certificate is imported, and every target writes files of fixed names, so one certificate has an
+		//enabled deployment to each target
+			$target_deployments = [];
 			foreach (is_array($certificate_deployments) ? $certificate_deployments : [] as $row) {
 				if (!is_array($row)) {
 					continue;
@@ -253,22 +254,25 @@
 					}
 				}
 				//a certificate saved turned off deploys nothing, so its rows are not counted, as other turned off ones are not
-				if (($row['deployment_target'] ?? '') == 'nginx' && ($row['deployment_enabled'] ?? '') != 'false' && !$deleting && $certificate_enabled == 'true') {
-					$nginx_deployments++;
+				$target = (string) ($row['deployment_target'] ?? '');
+				if (in_array($target, certificate_deployer::targets, true) && ($row['deployment_enabled'] ?? '') != 'false' && !$deleting && $certificate_enabled == 'true') {
+					$target_deployments[$target] = ($target_deployments[$target] ?? 0) + 1;
 				}
 			}
-			if ($nginx_deployments > 0) {
+			foreach ($target_deployments as $target => $count) {
 				$sql = "select count(*) from v_certificate_deployments as d ";
 				$sql .= "join v_certificates as c on c.certificate_uuid = d.certificate_uuid ";
-				$sql .= "where d.deployment_target = 'nginx' ";
+				$sql .= "where d.deployment_target = :deployment_target ";
 				$sql .= "and d.deployment_enabled = true ";
 				$sql .= "and c.certificate_enabled = true ";
 				$sql .= "and d.certificate_uuid <> :certificate_uuid ";
-				$nginx_deployments += (int) $database->select($sql, ['certificate_uuid' => is_uuid($certificate_uuid ?? '') ? $certificate_uuid : '00000000-0000-0000-0000-000000000000'], 'column');
-				unset($sql);
-			}
-			if ($nginx_deployments > 1) {
-				$msg .= $text['message-deployment_nginx_one']."<br>\n";
+				$parameters['deployment_target'] = $target;
+				$parameters['certificate_uuid'] = is_uuid($certificate_uuid ?? '') ? $certificate_uuid : '00000000-0000-0000-0000-000000000000';
+				$count += (int) $database->select($sql, $parameters, 'column');
+				unset($sql, $parameters);
+				if ($count > 1) {
+					$msg .= $text['message-deployment_target_one']." ".$text['option-deployment_target_'.$target]."<br>\n";
+				}
 			}
 
 			if (!empty($msg) && empty($_POST["persistformvar"])) {
@@ -418,6 +422,11 @@
 			$imported_serial = $certificate_source == 'import' ? ($details['serial'] ?? null) : null;
 			$database->save($array);
 			unset($array);
+
+		//a certificate turned back on is deployed again, as another may have written its targets while it was off
+			if ($action == 'update' && ($saved['certificate_enabled'] ?? '') != 'true' && $certificate_enabled == 'true') {
+				certificate_deployer::redeploy($database, $certificate_uuid);
+			}
 
 		//a newly imported certificate is deployed at once, also where the one before failed less than an hour ago
 			if ($imported_serial !== null && (string) $imported_serial !== (string) ($saved['certificate_serial'] ?? '')) {

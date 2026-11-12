@@ -61,6 +61,12 @@
 
 //get posted data
 	if (count($_POST) > 0) {
+		//every value of the form is text, the settings of the provider aside, so a value posted as a list is dropped
+		foreach ($_POST as $name => $value) {
+			if (is_array($value) && $name !== 'dns_provider_settings') {
+				$_POST[$name] = '';
+			}
+		}
 		$dns_provider_name = $_POST['dns_provider_name'] ?? '';
 		$dns_provider_type = is_string($_POST['dns_provider_type'] ?? '') ? ($_POST['dns_provider_type'] ?? '') : '';
 		$dns_provider_values = $_POST['dns_provider_settings'][$dns_provider_type] ?? [];

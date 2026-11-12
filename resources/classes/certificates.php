@@ -325,6 +325,13 @@ class certificates {
 					$this->database->save($array);
 					unset($array);
 
+					//a certificate turned back on is deployed again, as another may have written its targets while it was off
+					foreach ($states as $uuid => $state) {
+						if ($state != $this->toggle_values[0]) {
+							certificate_deployer::redeploy($this->database, $uuid);
+						}
+					}
+
 					//set message
 					message::add($text['message-toggle']);
 				}
