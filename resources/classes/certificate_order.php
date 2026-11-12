@@ -189,10 +189,13 @@ class certificate_order {
 				case 'finalized':
 					$this->collect();
 					break;
+				default:
+					//a state of no stage this knows, as from an older version or an edit by hand, can not be taken further
+					throw new Exception('the order is in a stage that is not known: ' . (string) ($this->state['stage'] ?? ''));
 			}
 			//a step that went through clears the count of passing errors, also one that saved nothing, such as one waiting
 			//for a record, so the errors are counted in a row
-			if ($transient > 0 && $this->state['stage'] != 'done') {
+			if ($transient > 0 && ($this->state['stage'] ?? '') != 'done') {
 				$this->save_state($this->status());
 			}
 			return $this->state['stage'] == 'done' ? 'valid' : $this->status();

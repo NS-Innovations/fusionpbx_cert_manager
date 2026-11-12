@@ -92,7 +92,18 @@ class certificate_deployer {
 	}
 
 	/**
-	 * Deploys every enabled deployment whose certificate changed since it was last deployed.
+	 * Reads the results of the nginx helper for the deployments waiting for it, which needs no key, as when the key file
+	 * can not be read.
+	 *
+	 * @return array The results that came in, as deploy() returns them.
+	 */
+	public function check_waiting(): array {
+		return $this->check_nginx();
+	}
+
+	/**
+	 * Deploys every deployment whose certificate changed since it was last deployed, after reading the results of the
+	 * nginx helper.
 	 *
 	 * @return array The results, one per deployment: name, target, status and message.
 	 */

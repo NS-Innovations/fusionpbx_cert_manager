@@ -193,15 +193,22 @@ class cert_manager_service extends service {
 			return;
 		}
 		$order = new certificate_order(['database' => $this->database, 'settings' => $this->settings, 'crypto' => $crypto]);
+		//each certificate is taken on its own, so one that throws, such as on an email that can not be sent, does not
+		//keep the ones after it from being taken
 		foreach ($certificates as $certificate) {
-			$status = $order->step($certificate['certificate_uuid']);
-			$this->debug($certificate['certificate_name'] . ': ' . $status);
-			if ($status == 'valid') {
-				$this->info('the certificate ' . $certificate['certificate_name'] . ' was issued');
+			try {
+				$status = $order->step($certificate['certificate_uuid']);
+				$this->debug($certificate['certificate_name'] . ': ' . $status);
+				if ($status == 'valid') {
+					$this->info('the certificate ' . $certificate['certificate_name'] . ' was issued');
+				}
+				elseif ($status == 'failed') {
+					$this->warning('the order of the certificate ' . $certificate['certificate_name'] . ' failed');
+					$this->notify_failed($certificate['certificate_uuid']);
+				}
 			}
-			elseif ($status == 'failed') {
-				$this->warning('the order of the certificate ' . $certificate['certificate_name'] . ' failed');
-				$this->notify_failed($certificate['certificate_uuid']);
+			catch (Throwable $e) {
+				$this->error('the certificate ' . $certificate['certificate_name'] . ': ' . $e->getMessage());
 			}
 		}
 	}
@@ -212,12 +219,11 @@ class cert_manager_service extends service {
 	 * @return void
 	 */
 	private function deploy_certificates(): void {
+		//without the key nothing new can be deployed, but the results of the nginx helper, which need no key, are read
 		$crypto = new cert_manager_crypto(['settings' => $this->settings]);
-		if (!$crypto->available()) {
-			return;
-		}
 		$deployer = new certificate_deployer(['database' => $this->database, 'settings' => $this->settings, 'crypto' => $crypto]);
-		foreach ($deployer->deploy_pending() as $result) {
+		$results = $crypto->available() ? $deployer->deploy_pending() : $deployer->check_waiting();
+		foreach ($results as $result) {
 			if ($result['status'] == 'failed') {
 				$this->warning('deploying ' . $result['name'] . ' to ' . $result['target'] . ' failed: ' . $result['message']);
 			}
