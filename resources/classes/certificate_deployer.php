@@ -108,7 +108,9 @@ class certificate_deployer {
 		$sql .= "and c.certificate_serial is not null ";
 		$sql .= "and c.certificate_not_after > now() ";
 		$sql .= "and d.deployment_serial is distinct from c.certificate_serial ";
-		$sql .= "and (d.deployment_status is distinct from 'failed' or d.update_date < now() - interval '1 hour' or d.update_date is null) ";
+		//a failed deployment is tried again an hour after it last failed, which its date records, as a save that
+		//changes nothing, such as the same failure again, does not move update_date
+		$sql .= "and (d.deployment_status is distinct from 'failed' or d.deployment_date is null or d.deployment_date < now() - interval '1 hour') ";
 		$rows = $this->database->select($sql, null, 'all');
 		unset($sql);
 
@@ -181,6 +183,9 @@ class certificate_deployer {
 		$array['certificate_deployments'][0]['certificate_deployment_uuid'] = $row['certificate_deployment_uuid'];
 		$array['certificate_deployments'][0]['deployment_status'] = $status;
 		$array['certificate_deployments'][0]['deployment_message'] = $message;
+		if ($status == 'failed') {
+			$array['certificate_deployments'][0]['deployment_date'] = 'now()';
+		}
 		if ($status != 'waiting') {
 			$array['certificate_logs'][0]['certificate_log_uuid'] = uuid();
 			$array['certificate_logs'][0]['certificate_uuid'] = $row['certificate_uuid'];

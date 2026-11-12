@@ -384,8 +384,10 @@ class certificate_order {
 			return true;
 		}
 
-		//every resolver has to see the value, since the authority may ask any of them
+		//every resolver has to see the value, since the authority may ask any of them; when none answers at all, the
+		//lookup itself failed, which passes, rather than the record not being there
 		$resolvers = $this->settings->get('cert_manager', 'dns_resolver', ['https://cloudflare-dns.com/dns-query']);
+		$answered = false;
 		foreach ((array) $resolvers as $resolver) {
 			$ch = curl_init($resolver . (strpos($resolver, '?') === false ? '?' : '&') . http_build_query(['name' => $entry['fqdn'], 'type' => 'TXT']));
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -394,6 +396,10 @@ class certificate_order {
 			curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
 			curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/dns-json']);
 			$response = json_decode((string) curl_exec($ch), true);
+			if (!is_array($response)) {
+				continue;
+			}
+			$answered = true;
 			$found = false;
 			foreach ($response['Answer'] ?? [] as $answer) {
 				if (($answer['type'] ?? 0) == 16 && trim(str_replace('" "', '', $answer['data'] ?? ''), '"') === $entry['value']) {
@@ -403,6 +409,9 @@ class certificate_order {
 			if (!$found) {
 				return false;
 			}
+		}
+		if (!$answered) {
+			throw new cert_manager_transient_exception('no DNS resolver could be reached to look up ' . $entry['fqdn']);
 		}
 		return true;
 	}
@@ -417,6 +426,9 @@ class certificate_order {
 		//an order the authority is already issuing, as when the service stopped after finalizing and before saving
 		//that it had, is collected rather than finalized again, which the authority would refuse
 		$order = $this->client->get($this->state['url']);
+		if (($order['status'] ?? '') == 'invalid') {
+			throw new Exception('the authority marked the order invalid' . (!empty($order['error']['detail']) ? ': ' . $order['error']['detail'] : ''));
+		}
 		if (in_array($order['status'] ?? '', ['processing', 'valid'], true)) {
 			$this->state['stage'] = 'finalized';
 			$this->state['finalized'] = $this->state['finalized'] ?? time();

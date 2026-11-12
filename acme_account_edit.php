@@ -148,15 +148,18 @@
 				}
 			}
 
+		//whether the account moves to another certificate authority
+			$directory_changed = !empty($saved['acme_account_directory']) && $saved['acme_account_directory'] !== $acme_account_directory;
+
 		//an account registered with another certificate authority has to register again
-			if (!empty($saved['acme_account_directory']) && $saved['acme_account_directory'] !== $acme_account_directory) {
+			if ($directory_changed) {
 				$array['acme_accounts'][0]['acme_account_key'] = null;
 				$array['acme_accounts'][0]['acme_account_url'] = null;
 				$array['acme_accounts'][0]['acme_account_status'] = null;
 			}
 
 		//the orders in progress with the old authority can not be completed with the new one, so they are let go of
-			if (!empty($saved['acme_account_directory']) && $saved['acme_account_directory'] !== $acme_account_directory) {
+			if ($directory_changed) {
 				$sql = "select certificate_uuid from v_certificates where acme_account_uuid = :acme_account_uuid and certificate_order is not null ";
 				foreach ($database->select($sql, ['acme_account_uuid' => $acme_account_uuid], 'all') ?: [] as $row) {
 					(new certificate_order(['database' => $database]))->abandon($row['certificate_uuid']);

@@ -302,7 +302,8 @@
 					|| (string) $saved['certificate_challenge'] !== (string) $certificate_challenge
 					|| (string) $saved['dns_provider_uuid'] !== (string) ($certificate_challenge == 'dns-01' ? $dns_provider_uuid : '')
 				));
-				if ($action == 'add' || $names_changed || $key_changed || ($certificate_renew_now && permission_exists('certificate_renew'))) {
+				//a change of what the order depends on orders again at once, rather than after the backoff of earlier failures
+				if ($action == 'add' || $names_changed || $key_changed || $abandon_order || ($certificate_renew_now && permission_exists('certificate_renew'))) {
 					$array['certificates'][0]['certificate_renew'] = 'true';
 					$array['certificates'][0]['certificate_attempts'] = 0;
 					$array['certificates'][0]['certificate_next_attempt'] = null;
@@ -345,7 +346,7 @@
 				}
 
 				$y = 0;
-				foreach ($certificate_deployments as $row) {
+				foreach (is_array($certificate_deployments) ? $certificate_deployments : [] as $row) {
 					$deployment_uuid = $row['certificate_deployment_uuid'] ?? '';
 					$target = $row['deployment_target'] ?? '';
 					if (!in_array($target, certificate_deployer::targets, true)) {
