@@ -87,6 +87,12 @@
 
 //get posted data
 	if (count($_POST) > 0) {
+		//every value of the form is text, the deployments aside, so a value posted as a list is dropped
+		foreach ($_POST as $name => $value) {
+			if (is_array($value) && !in_array($name, ['certificate_deployments', 'certificate_deployments_delete'], true)) {
+				$_POST[$name] = '';
+			}
+		}
 		$certificate_name = $_POST['certificate_name'] ?? '';
 		$certificate_source = ($_POST['certificate_source'] ?? '') == 'import' ? 'import' : 'acme';
 		$certificate_pem = $_POST['certificate_pem'] ?? '';
@@ -180,7 +186,7 @@
 				if ($certificate_challenge == 'http-01' && preg_grep('/^\*\./', $domains)) { $msg .= $text['message-certificate_wildcard_dns']."<br>\n"; }
 				if ($certificate_challenge == 'dns-01' && !is_uuid($dns_provider_uuid)) { $msg .= $text['message-required']." ".$text['label-dns_provider']."<br>\n"; }
 				if (!in_array($certificate_key_type, acme_client::key_types, true)) { $msg .= $text['message-required']." ".$text['label-certificate_key_type']."<br>\n"; }
-				if ($certificate_renew_days !== '' && (!ctype_digit($certificate_renew_days) || (int) $certificate_renew_days < 1)) { $msg .= $text['message-certificate_renew_days_invalid']."<br>\n"; }
+				if ($certificate_renew_days !== '' && (!ctype_digit($certificate_renew_days) || (int) $certificate_renew_days < 1 || (int) $certificate_renew_days > 365)) { $msg .= $text['message-certificate_renew_days_invalid']."<br>\n"; }
 			}
 
 		//read the imported certificate, its chain and its key
@@ -390,8 +396,14 @@
 			}
 
 		//save the data
+			$imported_serial = $certificate_source == 'import' ? ($details['serial'] ?? null) : null;
 			$database->save($array);
 			unset($array);
+
+		//a newly imported certificate is deployed at once, also where the one before failed less than an hour ago
+			if ($imported_serial !== null && $imported_serial != ($saved['certificate_serial'] ?? '')) {
+				certificate_deployer::retry_failed($database, $certificate_uuid);
+			}
 
 		//remove the checked deployments
 			if ($action == 'update' && permission_exists('certificate_deployment_delete') && !empty($certificate_deployments_delete)) {

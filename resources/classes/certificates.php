@@ -154,7 +154,11 @@ class certificates {
 
 				//save the changes
 				if (!empty($array) && is_array($array) && @sizeof($array) != 0) {
+					//asking for a renewal is the renew permission's, so the edit the save needs is granted for it
+					$p = permissions::new();
+					$p->add('certificate_edit', 'temp');
 					$this->database->save($array);
+					$p->delete('certificate_edit', 'temp');
 					unset($array);
 
 					//set message

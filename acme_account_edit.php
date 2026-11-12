@@ -93,7 +93,7 @@
 		//get the saved account, to keep what the form does not change
 			$saved = [];
 			if ($action == 'update') {
-				$sql = "select acme_account_directory, acme_account_eab_hmac, acme_account_key, acme_account_url ";
+				$sql = "select acme_account_directory, acme_account_eab_hmac, acme_account_key, acme_account_url, acme_account_email, cast(acme_account_enabled as text) as acme_account_enabled ";
 				$sql .= "from v_acme_accounts ";
 				$sql .= "where acme_account_uuid = :acme_account_uuid ";
 				$parameters['acme_account_uuid'] = $acme_account_uuid;
@@ -179,8 +179,12 @@
 				message::add($text['message-update']);
 			}
 
-		//register the account with the certificate authority, or update its contact
-			if ($acme_account_enabled == 'true') {
+		//register the account with the certificate authority, or update its contact, when something it holds changed, so
+		//a change of the name or the description does not depend on the authority being reachable
+			$needs_register = $action == 'add' || !empty($directory_changed) || empty($saved['acme_account_url'])
+				|| (string) ($saved['acme_account_email'] ?? '') !== (string) $acme_account_email
+				|| ($saved['acme_account_enabled'] ?? '') != 'true';
+			if ($acme_account_enabled == 'true' && $needs_register) {
 				try {
 					$obj = new acme_accounts;
 					$obj->register($acme_account_uuid, new cert_manager_crypto(['settings' => $settings]));

@@ -202,6 +202,38 @@ class certificate_deployer {
 	}
 
 	/**
+	 * Sets the failed deployments of a certificate back to pending, as when it got a new certificate, which is
+	 * deployed at once rather than after the hour a failure of the one before waits.
+	 *
+	 * @param database $database         The database.
+	 * @param string   $certificate_uuid The certificate.
+	 *
+	 * @return void
+	 */
+	public static function retry_failed(database $database, string $certificate_uuid): void {
+		if (!is_uuid($certificate_uuid)) {
+			return;
+		}
+		$sql = "select certificate_deployment_uuid from v_certificate_deployments ";
+		$sql .= "where certificate_uuid = :certificate_uuid ";
+		$sql .= "and deployment_status = 'failed' ";
+		$rows = $database->select($sql, ['certificate_uuid' => $certificate_uuid], 'all');
+		unset($sql);
+		if (!is_array($rows) || @sizeof($rows) == 0) {
+			return;
+		}
+		foreach ($rows as $x => $row) {
+			$array['certificate_deployments'][$x]['certificate_deployment_uuid'] = $row['certificate_deployment_uuid'];
+			$array['certificate_deployments'][$x]['deployment_status'] = 'pending';
+			$array['certificate_deployments'][$x]['deployment_date'] = null;
+		}
+		$p = permissions::new();
+		$p->add('certificate_deployment_edit', 'temp');
+		$database->save($array, false);
+		$p->delete('certificate_deployment_edit', 'temp');
+	}
+
+	/**
 	 * Writes the certificate where the root helper picks it up, and asks the helper to give it to nginx.
 	 *
 	 * The service runs as www-data and can neither write where nginx reads its certificate nor reload nginx.

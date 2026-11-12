@@ -62,7 +62,7 @@
 //get posted data
 	if (count($_POST) > 0) {
 		$dns_provider_name = $_POST['dns_provider_name'] ?? '';
-		$dns_provider_type = $_POST['dns_provider_type'] ?? '';
+		$dns_provider_type = is_string($_POST['dns_provider_type'] ?? '') ? ($_POST['dns_provider_type'] ?? '') : '';
 		$dns_provider_values = $_POST['dns_provider_settings'][$dns_provider_type] ?? [];
 		$dns_provider_enabled = ($_POST['dns_provider_enabled'] ?? '') == 'true' ? 'true' : 'false';
 		$dns_provider_description = $_POST['dns_provider_description'] ?? '';

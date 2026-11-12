@@ -542,6 +542,9 @@ class certificate_order {
 		$array['certificates'][0]['certificate_warned'] = null;
 		$this->save($array, 'certificate_edit');
 		$this->state['stage'] = 'done';
+
+		//the new certificate is deployed at once, also where the one before failed less than an hour ago
+		certificate_deployer::retry_failed($this->database, $this->certificate['certificate_uuid']);
 		$this->log('info', 'certificate issued by ' . $details['issuer'] . ', serial ' . $details['serial'] . ', valid until ' . $details['not_after']);
 
 		//then remove what was published, as well as it can be
