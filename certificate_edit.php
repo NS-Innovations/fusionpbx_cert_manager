@@ -232,7 +232,8 @@
 						$deleting = true;
 					}
 				}
-				if (($row['deployment_target'] ?? '') == 'nginx' && ($row['deployment_enabled'] ?? '') != 'false' && !$deleting) {
+				//a certificate saved turned off deploys nothing, so its rows are not counted, as other turned off ones are not
+				if (($row['deployment_target'] ?? '') == 'nginx' && ($row['deployment_enabled'] ?? '') != 'false' && !$deleting && $certificate_enabled == 'true') {
 					$nginx_deployments++;
 				}
 			}

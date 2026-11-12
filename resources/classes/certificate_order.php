@@ -190,6 +190,11 @@ class certificate_order {
 					$this->collect();
 					break;
 			}
+			//a step that went through clears the count of passing errors, also one that saved nothing, such as one waiting
+			//for a record, so the errors are counted in a row
+			if ($transient > 0 && $this->state['stage'] != 'done') {
+				$this->save_state($this->status());
+			}
 			return $this->state['stage'] == 'done' ? 'valid' : $this->status();
 		}
 		catch (Throwable $e) {
@@ -396,7 +401,10 @@ class certificate_order {
 			curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
 			curl_setopt($ch, CURLOPT_HTTPHEADER, ['Accept: application/dns-json']);
 			$response = json_decode((string) curl_exec($ch), true);
-			if (!is_array($response)) {
+			$http_status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+			//only an answer is an answer: a refusal, such as a rate limit, or a lookup that failed, such as SERVFAIL, is
+			//as good as no answer; NOERROR and NXDOMAIN, a name not there yet, are answers
+			if (!is_array($response) || $http_status != 200 || !in_array((int) ($response['Status'] ?? -1), [0, 3], true)) {
 				continue;
 			}
 			$answered = true;
@@ -488,6 +496,9 @@ class certificate_order {
 		$deadline = time() + self::poll_seconds;
 		do {
 			$order = $this->client->get($this->state['url']);
+			if (!isset($order['status'])) {
+				throw new Exception('the authority answered the order without a status');
+			}
 			if ($order['status'] == 'invalid') {
 				throw new Exception('the authority did not issue the certificate');
 			}
@@ -579,13 +590,23 @@ class certificate_order {
 	 * @throws Exception When something published cannot be removed.
 	 */
 	private function clean_up(): void {
+		//each one is removed on its own, so one that can not be removed does not leave the others behind
+		$errors = [];
 		foreach ($this->state['authorizations'] ?? [] as $entry) {
-			if (!empty($entry['file']) && file_exists($entry['file'])) {
-				unlink($entry['file']);
+			try {
+				if (!empty($entry['file']) && file_exists($entry['file'])) {
+					unlink($entry['file']);
+				}
+				if (!empty($entry['fqdn']) && empty($entry['manual'])) {
+					$this->provider()->delete_txt($entry['fqdn'], (string) ($entry['record'] ?? ''));
+				}
 			}
-			if (!empty($entry['fqdn']) && empty($entry['manual'])) {
-				$this->provider()->delete_txt($entry['fqdn'], (string) ($entry['record'] ?? ''));
+			catch (Throwable $e) {
+				$errors[] = ($entry['fqdn'] ?? $entry['file'] ?? $entry['domain'] ?? '') . ': ' . $e->getMessage();
 			}
+		}
+		if (!empty($errors)) {
+			throw new Exception(implode('; ', $errors));
 		}
 	}
 

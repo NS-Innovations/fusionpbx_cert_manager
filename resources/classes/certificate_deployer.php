@@ -247,8 +247,8 @@ class certificate_deployer {
 
 		$results = [];
 		$store = self::nginx_store;
+		$result = explode(' ', trim((string) @file_get_contents($store . '/deploy/nginx.result')), 3);
 		foreach ($rows ?: [] as $row) {
-			$result = explode(' ', trim((string) @file_get_contents($store . '/deploy/nginx.result')), 3);
 			if (count($result) == 3 && $result[1] === $row['deployment_serial']) {
 				$status = $result[0] == 'ok' ? 'deployed' : 'failed';
 				$message = $result[2];

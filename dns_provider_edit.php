@@ -101,6 +101,7 @@
 				$parameters['dns_provider_uuid'] = $dns_provider_uuid;
 				$row = $database->select($sql, $parameters, 'row');
 				unset($sql, $parameters);
+				$saved_type = is_array($row) ? ($row['dns_provider_type'] ?? null) : null;
 				if (is_array($row) && ($row['dns_provider_type'] ?? '') === $dns_provider_type) {
 					//settings sealed with another key, such as after a restore on another host, read as none
 					try {
@@ -162,6 +163,16 @@
 			$array['dns_providers'][0]['dns_provider_settings'] = dns_providers::encode_settings($values, $crypto);
 			$array['dns_providers'][0]['dns_provider_enabled'] = $dns_provider_enabled;
 			$array['dns_providers'][0]['dns_provider_description'] = $dns_provider_description;
+
+		//an order in progress published its records with the provider as it was, so a change of its type or settings
+		//lets those orders go first, removing their records with the provider as it was
+			if ($action == 'update' && isset($saved_type) && ($saved_type !== $dns_provider_type || $values != $saved_values)) {
+				$sql = "select certificate_uuid from v_certificates where dns_provider_uuid = :dns_provider_uuid and certificate_order is not null ";
+				foreach ($database->select($sql, ['dns_provider_uuid' => $dns_provider_uuid], 'all') ?: [] as $row) {
+					(new certificate_order(['database' => $database]))->abandon($row['certificate_uuid']);
+				}
+				unset($sql, $row);
+			}
 
 		//save the data
 			$database->save($array);
