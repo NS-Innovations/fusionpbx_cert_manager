@@ -35,18 +35,19 @@
  */
 class certificate_deployer {
 
-	/**
-	 * The directory the root nginx helper reads, fixed in the helper and so here, whatever store_dir says
-	 *
-	 * @var string
-	 */
-	const nginx_store = '/etc/fusionpbx/cert_manager';
 
 	/**
 	 * declare constant variables
 	 */
 	const app_name = 'cert_manager';
 	const app_uuid = 'ece22aae-0e63-465c-ac60-57cd701edbc4';
+
+	/**
+	 * The directory the root nginx helper reads, fixed in the helper and so here, whatever store_dir says
+	 *
+	 * @var string
+	 */
+	const nginx_store = '/etc/fusionpbx/cert_manager';
 
 	/**
 	 * the targets a certificate can be deployed to
@@ -379,8 +380,12 @@ class certificate_deployer {
 		//restart them
 		$restarted = [];
 		foreach ($profiles as $profile) {
-			if (event_socket::api("sofia profile '" . $profile . "' restart") === false) {
+			$response = event_socket::api("sofia profile '" . $profile . "' restart");
+			if ($response === false) {
 				throw new Exception('the switch could not be reached');
+			}
+			if (strpos(trim((string) $response), '-ERR') === 0) {
+				throw new Exception('the SIP profile ' . $profile . ' could not be restarted: ' . trim((string) $response));
 			}
 			$restarted[] = $profile;
 		}

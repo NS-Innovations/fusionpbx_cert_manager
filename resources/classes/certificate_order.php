@@ -44,6 +44,12 @@
 class certificate_order {
 
 	/**
+	 * declare constant variables
+	 */
+	const app_name = 'cert_manager';
+	const app_uuid = 'ece22aae-0e63-465c-ac60-57cd701edbc4';
+
+	/**
 	 * The passing errors in a row an order in progress is kept through, about an hour at the default interval
 	 *
 	 * @var int
@@ -51,10 +57,11 @@ class certificate_order {
 	const transient_limit = 60;
 
 	/**
-	 * declare constant variables
+	 * The seconds an authority is given to issue a finalized certificate before the order is given up
+	 *
+	 * @var int
 	 */
-	const app_name = 'cert_manager';
-	const app_uuid = 'ece22aae-0e63-465c-ac60-57cd701edbc4';
+	const issue_seconds = 86400;
 
 	/**
 	 * how long a step waits for the authority before leaving the rest to the next step, in seconds
@@ -158,7 +165,7 @@ class certificate_order {
 
 			//an order that has outlived itself cannot be completed, unless it was finalized, when the certificate may be
 			//waiting to be collected
-			if (!empty($this->state['expires']) && $this->state['expires'] < time() && ($this->state['stage'] ?? '') != 'finalized') {
+			if (!empty($this->state['expires']) && $this->state['expires'] < time() && !in_array($this->state['stage'] ?? '', ['responded', 'finalized'], true)) {
 				throw new Exception('the order expired before it was completed');
 			}
 
@@ -321,10 +328,7 @@ class certificate_order {
 				throw new Exception('the http-01 directory ' . $directory . ' does not exist or cannot be written');
 			}
 			$entry['file'] = $directory . '/' . $entry['token'];
-			if (file_put_contents($entry['file'], $this->client->key_authorization($entry['token'])) === false) {
-				throw new Exception('the http-01 challenge could not be written to ' . $entry['file']);
-			}
-			@chmod($entry['file'], 0644);
+			certificate_deployer::write_file($entry['file'], $this->client->key_authorization($entry['token']), 0644);
 			return;
 		}
 		if ($entry['type'] == 'dns-01') {
@@ -383,7 +387,7 @@ class certificate_order {
 		//every resolver has to see the value, since the authority may ask any of them
 		$resolvers = $this->settings->get('cert_manager', 'dns_resolver', ['https://cloudflare-dns.com/dns-query']);
 		foreach ((array) $resolvers as $resolver) {
-			$ch = curl_init($resolver . '?' . http_build_query(['name' => $entry['fqdn'], 'type' => 'TXT']));
+			$ch = curl_init($resolver . (strpos($resolver, '?') === false ? '?' : '&') . http_build_query(['name' => $entry['fqdn'], 'type' => 'TXT']));
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 10);
@@ -415,6 +419,7 @@ class certificate_order {
 		$order = $this->client->get($this->state['url']);
 		if (in_array($order['status'] ?? '', ['processing', 'valid'], true)) {
 			$this->state['stage'] = 'finalized';
+			$this->state['finalized'] = $this->state['finalized'] ?? time();
 			$this->save_state('ordering');
 			$this->collect();
 			return;
@@ -456,6 +461,7 @@ class certificate_order {
 		$csr = acme_client::csr($private_key, $this->state['domains'] ?? certificates::split_domains($this->certificate['certificate_domains']));
 		$this->client->finalize($this->state['finalize'], $csr);
 		$this->state['stage'] = 'finalized';
+		$this->state['finalized'] = time();
 		$this->save_state('ordering');
 		$this->collect();
 	}
@@ -478,6 +484,12 @@ class certificate_order {
 			}
 		} while ($order['status'] != 'valid' && time() < $deadline);
 		if ($order['status'] != 'valid') {
+			//an authority that never issues is given up on after a day; until then the pass that went through is saved,
+			//which clears the count of passing errors, so it counts errors in a row
+			if (time() - (int) ($this->state['finalized'] ?? time()) > self::issue_seconds) {
+				throw new Exception('the authority did not issue the certificate within a day of the order being finalized');
+			}
+			$this->save_state('ordering');
 			return;
 		}
 

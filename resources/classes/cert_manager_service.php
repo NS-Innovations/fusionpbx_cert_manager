@@ -93,7 +93,8 @@ class cert_manager_service extends service {
 	private function refresh_settings(): void {
 		$this->settings = new settings(['database' => $this->database]);
 		$this->enabled = $this->settings->get('cert_manager', 'enabled', true);
-		$this->interval = (int) $this->settings->get('cert_manager', 'interval', 60);
+		//keep the loop from spinning, on every pass and not only on start
+		$this->interval = max(10, (int) $this->settings->get('cert_manager', 'interval', 60));
 		$this->renew_days = (int) $this->settings->get('cert_manager', 'renew_days', 30);
 		$this->log_retention_days = (int) $this->settings->get('cert_manager', 'log_retention_days', 90);
 	}
@@ -112,11 +113,6 @@ class cert_manager_service extends service {
 
 		//get the settings using the global defaults
 		$this->refresh_settings();
-
-		//keep the loop from spinning
-		if ($this->interval < 10) {
-			$this->interval = 10;
-		}
 	}
 
 	/**

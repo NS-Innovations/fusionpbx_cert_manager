@@ -560,7 +560,7 @@
 			echo "	<table class='list' style='width: auto;'>\n";
 			echo "		<tr class='list-header'><th>".$text['label-type']."</th><th>".$text['label-name']."</th><th>".$text['label-value']."</th></tr>\n";
 			foreach ($records as $entry) {
-				echo "		<tr class='list-row'><td>TXT</td><td style='font-family: monospace;'>".escape($entry['fqdn'])."</td><td style='font-family: monospace;'>".escape($entry['value'])."</td></tr>\n";
+				echo "		<tr class='list-row'><td>".$text['label-record_type_txt']."</td><td style='font-family: monospace;'>".escape($entry['fqdn'])."</td><td style='font-family: monospace;'>".escape($entry['value'])."</td></tr>\n";
 			}
 			echo "	</table>\n";
 			echo "</td>\n";
