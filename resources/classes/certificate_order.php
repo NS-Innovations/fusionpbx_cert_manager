@@ -723,6 +723,14 @@ class certificate_order {
 	 * @return void
 	 */
 	private function save(array $array, string $permission): void {
+		//the service only ever changes a certificate that is there, so one deleted while a step ran is not put back as an
+		//almost empty row
+		foreach ($array['certificates'] ?? [] as $row) {
+			$sql = "select count(*) from v_certificates where certificate_uuid = :certificate_uuid ";
+			if ((int) $this->database->select($sql, ['certificate_uuid' => $row['certificate_uuid'] ?? ''], 'column') !== 1) {
+				return;
+			}
+		}
 		$p = permissions::new();
 		$p->add($permission, 'temp');
 		$this->database->save($array, false);

@@ -180,6 +180,12 @@ class certificate_deployer {
 	 * @return void
 	 */
 	private function record(array $row, string $status, string $message, array $array = []): void {
+		//a deployment deleted while it ran is not put back as an almost empty row
+		$sql = "select count(*) from v_certificate_deployments where certificate_deployment_uuid = :uuid ";
+		if ((int) $this->database->select($sql, ['uuid' => $row['certificate_deployment_uuid']], 'column') !== 1) {
+			return;
+		}
+		unset($sql);
 		$array['certificate_deployments'][0]['certificate_deployment_uuid'] = $row['certificate_deployment_uuid'];
 		$array['certificate_deployments'][0]['deployment_status'] = $status;
 		$array['certificate_deployments'][0]['deployment_message'] = $message;

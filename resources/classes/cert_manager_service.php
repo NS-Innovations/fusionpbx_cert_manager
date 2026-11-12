@@ -364,7 +364,7 @@ class cert_manager_service extends service {
 		//the values, such as the reply of an authority, are put in once each, the body taking them escaped, as the email
 		//is sent as html and a value could otherwise add markup to it
 		$subject_values = array_map(function ($value) { return str_replace(["\r", "\n"], ' ', (string) $value); }, $values);
-		$body_values = array_map(function ($value) { return htmlspecialchars((string) $value, ENT_QUOTES); }, $values);
+		$body_values = array_map(function ($value) { return escape((string) $value); }, $values);
 		$email->subject = strtr($text['email_subject-' . $type], $subject_values);
 		$email->body = strtr($text['email_body-' . $type], $body_values);
 		$email->from_address = $from_address;

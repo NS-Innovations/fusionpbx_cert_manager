@@ -145,7 +145,7 @@ class acme_client {
 			if ($response['status'] != 200 || !is_array($response['json']) || empty($response['json']['newAccount'])) {
 				//a server error, as during maintenance of the authority, passes
 				$message = 'the ACME directory ' . $this->directory_url . ' could not be read (HTTP ' . $response['status'] . ')';
-				if ((int) $response['status'] >= 500) {
+				if ((int) $response['status'] >= 500 || (int) $response['status'] == 429) {
 					throw new cert_manager_transient_exception($message);
 				}
 				throw new Exception($message);
@@ -412,7 +412,8 @@ class acme_client {
 	 */
 	protected function problem_exception(array $response, string $default): Exception {
 		$type = str_replace('urn:ietf:params:acme:error:', '', (string) ($response['json']['type'] ?? ''));
-		if ((int) $response['status'] >= 500 || $type == 'serverInternal') {
+		//a server error, and a rate limit, which lifts with time, pass
+		if ((int) $response['status'] >= 500 || (int) $response['status'] == 429 || in_array($type, ['serverInternal', 'rateLimited'], true)) {
 			return new cert_manager_transient_exception($this->problem($response, $default));
 		}
 		return new Exception($this->problem($response, $default));

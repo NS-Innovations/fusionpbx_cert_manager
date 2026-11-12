@@ -217,7 +217,21 @@
 					$msg .= $text['message-required']." ".$text['label-certificate_private_key']."<br>\n";
 				}
 				elseif (!cert_manager_pem::key_matches($imported_key, $imported[0])) {
-					$msg .= $text['message-certificate_key_mismatch']."<br>\n";
+					//a bundle pasted issuer first has the certificate of the key further down
+					foreach ($imported as $index => $block) {
+						if ($index > 0 && cert_manager_pem::key_matches($imported_key, $block)) {
+							unset($imported[$index]);
+							array_unshift($imported, $block);
+							$imported = array_values($imported);
+							break;
+						}
+					}
+					if (!cert_manager_pem::key_matches($imported_key, $imported[0])) {
+						$msg .= $text['message-certificate_key_mismatch']."<br>\n";
+					}
+					else {
+						$details = cert_manager_pem::details($imported[0]);
+					}
 				}
 				else {
 					$details = cert_manager_pem::details($imported[0]);
@@ -309,8 +323,13 @@
 					|| (string) $saved['certificate_challenge'] !== (string) $certificate_challenge
 					|| (string) $saved['dns_provider_uuid'] !== (string) ($certificate_challenge == 'dns-01' ? $dns_provider_uuid : '')
 				));
-				//a change of what the order depends on orders again at once, rather than after the backoff of earlier failures
-				if ($action == 'add' || $names_changed || $key_changed || $abandon_order || ($certificate_renew_now && permission_exists('certificate_renew'))) {
+				//a change of what the order depends on is tried at once when the certificate is due, rather than after the
+				//backoff of earlier failures, without ordering one that is not due
+				if ($abandon_order) {
+					$array['certificates'][0]['certificate_attempts'] = 0;
+					$array['certificates'][0]['certificate_next_attempt'] = null;
+				}
+				if ($action == 'add' || $names_changed || $key_changed || ($certificate_renew_now && permission_exists('certificate_renew'))) {
 					$array['certificates'][0]['certificate_renew'] = 'true';
 					$array['certificates'][0]['certificate_attempts'] = 0;
 					$array['certificates'][0]['certificate_next_attempt'] = null;
@@ -330,7 +349,7 @@
 				$array['certificates'][0]['certificate_status'] = 'valid';
 				$array['certificates'][0]['certificate_message'] = null;
 				$array['certificates'][0]['certificate_renew'] = 'false';
-				$array['certificates'][0]['certificate_warned'] = $details['serial'] != ($saved['certificate_serial'] ?? '') ? null : ($saved['certificate_warned'] ?? null);
+				$array['certificates'][0]['certificate_warned'] = (string) $details['serial'] !== (string) ($saved['certificate_serial'] ?? '') ? null : ($saved['certificate_warned'] ?? null);
 				if (permission_exists('certificate_private_key')) {
 					$array['certificates'][0]['certificate_private_key'] = $crypto->encrypt($imported_key);
 				}
@@ -401,7 +420,7 @@
 			unset($array);
 
 		//a newly imported certificate is deployed at once, also where the one before failed less than an hour ago
-			if ($imported_serial !== null && $imported_serial != ($saved['certificate_serial'] ?? '')) {
+			if ($imported_serial !== null && (string) $imported_serial !== (string) ($saved['certificate_serial'] ?? '')) {
 				certificate_deployer::retry_failed($database, $certificate_uuid);
 			}
 
